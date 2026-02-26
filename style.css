@@ -162,6 +162,35 @@ h1 span{
   flex-wrap: wrap;
 }
 
+
+.hero-trust{
+  margin: 26px auto 0;
+  display:grid;
+  grid-template-columns: repeat(3, minmax(140px, 1fr));
+  gap: 12px;
+  max-width: 760px;
+}
+
+.trust-item{
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.015));
+  border-radius: 14px;
+  padding: 12px;
+  display:grid;
+  gap: 4px;
+}
+
+.trust-value{
+  font-size: 1.15rem;
+  font-weight: 900;
+  letter-spacing: .4px;
+}
+
+.trust-label{
+  color: var(--muted-2);
+  font-size: .84rem;
+}
+
 .btn{
   display:inline-flex;
   align-items:center;
@@ -264,6 +293,51 @@ section{
   color: var(--muted);
   line-height: 1.7;
   font-size: .98rem;
+}
+
+
+.process-grid{
+  display:grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.process-card{
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
+  border-radius: var(--radius);
+  padding: 20px;
+  transition: .22s ease;
+}
+
+.process-card:hover{
+  transform: translateY(-5px);
+  border-color: rgba(255,255,255,.2);
+  box-shadow: 0 16px 42px rgba(0,0,0,.45);
+}
+
+.process-step{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,.18);
+  background: rgba(255,255,255,.06);
+  font-size: .88rem;
+  font-weight: 800;
+  margin-bottom: 12px;
+}
+
+.process-card h3{
+  margin-bottom: 10px;
+  font-size: 1.05rem;
+}
+
+.process-card p{
+  color: var(--muted);
+  line-height: 1.6;
 }
 
 /* OPINIE */
@@ -460,6 +534,7 @@ footer{
 @media (max-width: 720px){
   .nav-links{ display:none; }
   .form-row{ grid-template-columns: 1fr; }
+  .hero-trust{ grid-template-columns: 1fr; }
 }
 
 /* ===== CONTACT (upgrade) ===== */
