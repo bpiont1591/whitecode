@@ -226,71 +226,63 @@
       &copy; 2026 WH!TEcode™. Wszystkie prawa zastrzeżone.
     </div>
   </footer>
+<script>
+  const API_CONTACT = "/contact"; // Pages Function endpoint
 
-  <script>
-    const DISCORD_WEBHOOK_URL = "WSTAW_TUTAJ_SWOJ_WEBHOOK";
+  const form = document.getElementById("contactForm");
+  const statusEl = document.getElementById("status");
 
-    const form = document.getElementById("contactForm");
-    const statusEl = document.getElementById("status");
+  function setStatus(msg, type){
+    statusEl.textContent = msg;
+    statusEl.className = "status " + (type || "");
+  }
 
-    function setStatus(msg, type){
-      statusEl.textContent = msg;
-      statusEl.className = "status " + (type || "");
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    const name = document.getElementById("name").value.trim();
+    const contact = document.getElementById("contact").value.trim();
+    const topic = document.getElementById("topic").value.trim();
+    const message = document.getElementById("message").value.trim();
+
+    if (!name || !contact || !topic || !message) {
+      setStatus("Uzupełnij wszystkie pola.", "err");
+      return;
     }
 
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault();
+    // prosty anty-bot: jak ktoś wklei link w temat + wiadomość, to często spam
+    // (opcjonalne — usuń jeśli nie chcesz)
+    if ((topic + " " + message).toLowerCase().includes("http")) {
+      // nie blokuję na sztywno, tylko ostrzegam:
+      // setStatus("⚠️ Linki w treści mogą być zablokowane.", "err");
+      // return;
+    }
 
-      if (!DISCORD_WEBHOOK_URL || DISCORD_WEBHOOK_URL.includes("WSTAW_TUTAJ")) {
-        setStatus("Ustaw webhook w kodzie (DISCORD_WEBHOOK_URL).", "err");
+    setStatus("Wysyłam…", "");
+
+    const payload = { name, contact, topic, message };
+
+    try {
+      const res = await fetch(API_CONTACT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      const out = await res.json().catch(() => ({}));
+
+      if (!res.ok || !out.ok) {
+        setStatus(out.error || "Nie udało się wysłać. Spróbuj ponownie.", "err");
         return;
       }
 
-      const name = document.getElementById("name").value.trim();
-      const contact = document.getElementById("contact").value.trim();
-      const topic = document.getElementById("topic").value.trim();
-      const message = document.getElementById("message").value.trim();
-
-      if (!name || !contact || !topic || !message) {
-        setStatus("Uzupełnij wszystkie pola.", "err");
-        return;
-      }
-
-      setStatus("Wysyłam…", "");
-
-      const payload = {
-        username: "Kontakt ze strony (WH!TEcode)",
-        embeds: [{
-          title: "Nowa wiadomość z formularza",
-          description: message.length > 3500 ? (message.slice(0, 3500) + "…") : message,
-          color: 0xFFFFFF,
-          fields: [
-            { name: "Nick / Imię", value: name, inline: true },
-            { name: "Kontakt", value: contact, inline: true },
-            { name: "Temat", value: topic, inline: false }
-          ],
-          timestamp: new Date().toISOString()
-        }]
-      };
-
-      try{
-        const res = await fetch(DISCORD_WEBHOOK_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
-
-        if (!res.ok) {
-          setStatus("Nie udało się wysłać. Sprawdź webhook.", "err");
-          return;
-        }
-
-        form.reset();
-        setStatus("Wysłane ✅", "ok");
-      } catch (err){
-        setStatus("Błąd sieci. Spróbuj ponownie.", "err");
-      }
-    });
-  </script>
+      form.reset();
+      setStatus("Wysłane ✅", "ok");
+    } catch (err) {
+      setStatus("Błąd sieci. Spróbuj ponownie.", "err");
+    }
+  });
+</script>
 </body>
+
 </html>
