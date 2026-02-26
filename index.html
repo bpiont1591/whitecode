@@ -152,43 +152,102 @@
 
   <!-- KONTAKT -->
   <section id="kontakt">
-    <h2 class="section-title">Kontakt <span class="glow">przez stronę</span></h2>
+    <h2 class="section-title">Kontakt <span class="glow">bez spiny</span></h2>
     <p class="section-subtitle">
-      Wyślij wiadomość — dostaniemy ją na Discordzie i odpiszemy.
+      Napisz, co potrzebujesz — wróci to do nas na Discord i odpiszemy możliwie szybko.
     </p>
 
-    <div class="contact-wrap single">
-      <div class="panel">
-        <h3>Formularz kontaktowy</h3>
+    <div class="contact-grid">
+      <!-- Lewa kolumna: szybkie opcje + info -->
+      <aside class="contact-aside">
+        <div class="contact-card">
+          <div class="contact-card-icon"><i class="fa-brands fa-discord"></i></div>
+          <div class="contact-card-body">
+            <div class="contact-card-title">Najszybciej: Discord</div>
+            <div class="contact-card-text">Wbij na serwer i napisz na tickecie albo prywatnie.</div>
+            <a class="contact-link" href="https://discord.gg/YCsPKP5VEJ" target="_blank" rel="noreferrer">
+              Otwórz serwer <i class="fa-solid fa-arrow-up-right-from-square"></i>
+            </a>
+          </div>
+        </div>
 
-        <form id="contactForm">
+        <div class="contact-card">
+          <div class="contact-card-icon"><i class="fa-solid fa-envelope"></i></div>
+          <div class="contact-card-body">
+            <div class="contact-card-title">E-mail</div>
+            <div class="contact-card-text">Dobre do dłuższych opisów i plików.</div>
+            <a class="contact-link" href="mailto:bakmikolaj237@gmail.com">
+              bakmikolaj237@gmail.com
+            </a>
+          </div>
+        </div>
+
+        <div class="contact-mini">
+          <div class="mini-pill"><i class="fa-solid fa-clock"></i> Zwykle odpisujemy w 24h</div>
+          <div class="mini-pill"><i class="fa-solid fa-shield"></i> Bez udostępniania danych</div>
+          <div class="mini-pill"><i class="fa-solid fa-location-dot"></i> Rzeszów / online</div>
+        </div>
+      </aside>
+
+      <!-- Prawa kolumna: formularz -->
+      <div class="panel contact-panel">
+        <div class="panel-head">
+          <div>
+            <h3>Formularz kontaktowy</h3>
+            <p class="panel-sub">Krótko i konkretnie — tym szybciej zrobimy wycenę.</p>
+          </div>
+        </div>
+
+        <form id="contactForm" class="contact-form">
           <div class="form-row">
-            <div>
+            <div class="field">
               <label for="name">Nick / Imię</label>
-              <input id="name" name="name" type="text" placeholder="np. Mikołaj / User123" required />
+              <div class="input-wrap">
+                <i class="fa-solid fa-user"></i>
+                <input id="name" name="name" type="text" placeholder="np. Mikołaj / User123" required />
+              </div>
             </div>
-            <div>
+
+            <div class="field">
               <label for="contact">Kontakt (Discord / e-mail)</label>
-              <input id="contact" name="contact" type="text" placeholder="np. @twojNick lub mail" required />
+              <div class="input-wrap">
+                <i class="fa-solid fa-at"></i>
+                <input id="contact" name="contact" type="text" placeholder="np. @twojNick lub mail" required />
+              </div>
             </div>
           </div>
 
-          <div>
+          <div class="field">
             <label for="topic">Temat</label>
-            <input id="topic" name="topic" type="text" placeholder="np. Bot do ticketów + logi" required />
+            <div class="input-wrap">
+              <i class="fa-solid fa-tag"></i>
+              <input id="topic" name="topic" type="text" placeholder="np. Tickety + logi + weryfikacja" required />
+            </div>
           </div>
 
-          <div>
+          <div class="field">
             <label for="message">Wiadomość</label>
-            <textarea id="message" name="message" placeholder="Opisz funkcje bota i wymagania..." required></textarea>
+            <div class="textarea-wrap">
+              <textarea id="message" name="message" placeholder="Opisz serwer, funkcje, kanały/role i ewentualny termin." required></textarea>
+              <div class="char-row">
+                <span class="char-hint">Pro tip: im więcej konkretów, tym mniej ping-ponga.</span>
+                <span id="charCount" class="char-count">0/4000</span>
+              </div>
+            </div>
           </div>
 
-          <button class="btn btn-primary" type="submit">
+          <!-- honeypot: boty lubią to wypełniać -->
+          <input id="website" name="website" type="text" autocomplete="off" tabindex="-1" class="hp" />
+
+          <button class="btn btn-primary btn-wide" type="submit">
             <i class="fa-solid fa-paper-plane"></i>
-            Wyślij
+            Wyślij wiadomość
           </button>
 
-          <div id="status" class="status"></div>
+          <div id="status" class="status status-box" aria-live="polite"></div>
+          <div class="privacy-note">
+            Wysyłając formularz, wysyłasz wiadomość do nas na Discord. Nie zapisujemy tego w żadnej „wielkiej bazie zła”.
+          </div>
         </form>
       </div>
     </div>
@@ -231,36 +290,53 @@
 
   const form = document.getElementById("contactForm");
   const statusEl = document.getElementById("status");
+  const messageEl = document.getElementById("message");
+  const charCountEl = document.getElementById("charCount");
+  const hpEl = document.getElementById("website");
 
   function setStatus(msg, type){
     statusEl.textContent = msg;
-    statusEl.className = "status " + (type || "");
+    statusEl.className = "status status-box " + (type || "");
   }
+
+  function updateCount(){
+    const len = (messageEl.value || "").length;
+    if (charCountEl) charCountEl.textContent = `${len}/4000`;
+  }
+
+  updateCount();
+  messageEl.addEventListener("input", updateCount);
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
 
+    // honeypot (dla botów): jeśli coś tu jest, udajemy sukces
+    if ((hpEl?.value || "").trim().length > 0) {
+      form.reset();
+      updateCount();
+      setStatus("Wysłane ✅", "ok");
+      return;
+    }
+
     const name = document.getElementById("name").value.trim();
     const contact = document.getElementById("contact").value.trim();
     const topic = document.getElementById("topic").value.trim();
-    const message = document.getElementById("message").value.trim();
+    const message = messageEl.value.trim();
 
     if (!name || !contact || !topic || !message) {
       setStatus("Uzupełnij wszystkie pola.", "err");
       return;
     }
 
-    // prosty anty-bot: jak ktoś wklei link w temat + wiadomość, to często spam
-    // (opcjonalne — usuń jeśli nie chcesz)
-    if ((topic + " " + message).toLowerCase().includes("http")) {
-      // nie blokuję na sztywno, tylko ostrzegam:
-      // setStatus("⚠️ Linki w treści mogą być zablokowane.", "err");
-      // return;
+    if (message.length > 4000) {
+      setStatus("Wiadomość jest za długa (max 4000 znaków).", "err");
+      return;
     }
 
     setStatus("Wysyłam…", "");
 
-    const payload = { name, contact, topic, message };
+    // hpWebsite zostaje dla zgodności z backendem (jeśli go używasz)
+    const payload = { name, contact, topic, message, hpWebsite: "" };
 
     try {
       const res = await fetch(API_CONTACT, {
@@ -277,6 +353,7 @@
       }
 
       form.reset();
+      updateCount();
       setStatus("Wysłane ✅", "ok");
     } catch (err) {
       setStatus("Błąd sieci. Spróbuj ponownie.", "err");
