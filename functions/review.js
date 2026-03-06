@@ -199,11 +199,10 @@ export async function onRequestPost({ request, env }) {
 
     if (!persistedToDb) {
       return json({
-        ok: true,
-        item: reviewItem,
-        warning: "Opinia dodana, ale nie udało się zapisać jej trwale w D1.",
+        ok: false,
+        error: "Nie udało się zapisać opinii trwale w D1. Spróbuj ponownie za chwilę.",
         code: dbWriteErrorCode || "d1_write_failed"
-      });
+      }, 503);
     }
 
     return json({ ok: true, item: reviewItem });

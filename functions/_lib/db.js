@@ -129,69 +129,69 @@ export async function saveContactMessage(db, row) {
 export async function saveReview(db, row) {
   if (!db) return null;
 
+  const payload = [
+    row.created_at,
+    row.discord_user_id,
+    row.discord_user_display,
+    row.review,
+    row.rating,
+    row.webhook_status,
+    row.webhook_error ?? null
+  ];
+
+  // 1) primary target: canonical reviews table
   try {
-    const stmt = db.prepare(`
+    const fullStmt = db.prepare(`
       INSERT INTO reviews (
         created_at, discord_user_id, discord_user_display,
         review, rating, webhook_status, webhook_error
       ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
-    `).bind(
-      row.created_at,
-      row.discord_user_id,
-      row.discord_user_display,
-      row.review,
-      row.rating,
-      row.webhook_status,
-      row.webhook_error ?? null
-    );
+    `).bind(...payload);
 
-    const res = await stmt.run();
-    return res?.meta?.last_row_id ?? null;
-  } catch (error) {
-    // compatibility fallback for legacy tables that may still miss webhook_* columns
-    const message = error instanceof Error ? error.message : String(error);
-    const mentionsWebhookColumn = /webhook_status|webhook_error|no such column/i.test(message);
-    const mentionsCoreReviewColumn = /created_at|discord_user_id|discord_user_display|review|rating|no such column/i.test(message);
+    const fullRes = await fullStmt.run();
+    return fullRes?.meta?.last_row_id ?? null;
+  } catch (fullError) {
+    const fullMessage = fullError instanceof Error ? fullError.message : String(fullError);
 
-    if (mentionsWebhookColumn) {
-      const fallbackStmt = db.prepare(`
-        INSERT INTO reviews (
-          created_at, discord_user_id, discord_user_display,
-          review, rating
-        ) VALUES (?1, ?2, ?3, ?4, ?5)
-      `).bind(
-        row.created_at,
-        row.discord_user_id,
-        row.discord_user_display,
-        row.review,
-        row.rating
-      );
+    // 2) compatibility: legacy reviews without webhook_* columns
+    if (/webhook_status|webhook_error|no such column/i.test(fullMessage)) {
+      try {
+        const legacyStmt = db.prepare(`
+          INSERT INTO reviews (
+            created_at, discord_user_id, discord_user_display,
+            review, rating
+          ) VALUES (?1, ?2, ?3, ?4, ?5)
+        `).bind(
+          row.created_at,
+          row.discord_user_id,
+          row.discord_user_display,
+          row.review,
+          row.rating
+        );
 
-      const fallbackRes = await fallbackStmt.run();
-      return fallbackRes?.meta?.last_row_id ?? null;
+        const legacyRes = await legacyStmt.run();
+        return legacyRes?.meta?.last_row_id ?? null;
+      } catch {
+        // continue to reviews_v2 fallback
+      }
     }
 
-    if (mentionsCoreReviewColumn) {
+    // 3) hard fallback: dedicated compatible table, create lazily if needed
+    try {
+      await runSql(db, CREATE_REVIEWS_V2_SQL);
       const v2Stmt = db.prepare(`
         INSERT INTO reviews_v2 (
           created_at, discord_user_id, discord_user_display,
           review, rating, webhook_status, webhook_error
         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
-      `).bind(
-        row.created_at,
-        row.discord_user_id,
-        row.discord_user_display,
-        row.review,
-        row.rating,
-        row.webhook_status,
-        row.webhook_error ?? null
-      );
+      `).bind(...payload);
 
       const v2Res = await v2Stmt.run();
       return v2Res?.meta?.last_row_id ?? null;
+    } catch (v2Error) {
+      const v2Message = v2Error instanceof Error ? v2Error.message : String(v2Error);
+      throw new Error(`saveReview failed on reviews and reviews_v2: ${fullMessage} | ${v2Message}`);
     }
-
-    throw error;
   }
 }
 
