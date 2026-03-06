@@ -236,6 +236,7 @@ function setAuthUI(user) {
 
       setReviewStatus("Wysyłam opinię…", "");
       try {
+        await warmupDatabaseSchema();
         const res = await fetch(API_REVIEW, {
           method: "POST",
           credentials: "include",

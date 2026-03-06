@@ -46,14 +46,14 @@ Opcjonalnie możesz ustawić osobny webhook dla opinii:
 
 
 ## Trwałość opinii (zalecane D1)
-Opinie są zapisywane trwale do D1 (tabela `reviews`).
+Opinie są zapisywane trwale do D1 (preferowana tabela `reviews_v2`, kompatybilnie także `reviews`).
 
 Fallback: jeśli D1 jest chwilowo niedostępne, API może tymczasowo pokazać ostatnie opinie z pamięci runtime.
 
 `GET /db/init` wykonuje:
 - inicjalizację/migracje schematu,
-- walidację wymaganych kolumn tabeli `reviews`,
-- healthcheck write-read-delete na `reviews`.
+- utworzenie i weryfikację tabel (`reviews`, `reviews_v2`),
+- healthcheck write-read-delete na ścieżce zapisu opinii.
 
 
 ## Oceny opinii i widoczność na stronie

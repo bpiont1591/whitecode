@@ -82,22 +82,7 @@ export async function ensureSchema(db) {
     throw new Error("schema verification failed");
   }
 
-  const reviewColumns = await listTableColumns(db, "reviews");
-  const expectedReviewColumns = [
-    "created_at",
-    "discord_user_id",
-    "discord_user_display",
-    "review",
-    "rating",
-    "webhook_status",
-    "webhook_error"
-  ];
-
-  for (const col of expectedReviewColumns) {
-    if (!reviewColumns.has(col)) {
-      throw new Error(`reviews schema mismatch: missing column ${col}`);
-    }
-  }
+  // Prefer resilient writes to reviews_v2; legacy reviews may have drifted schema.
 
   initializedSchemas.add(db);
 }
@@ -140,22 +125,35 @@ export async function saveReview(db, row) {
     row.webhook_error ?? null
   ];
 
-  // 1) primary target: canonical reviews table
+  // 1) Primary durable path: canonical reviews_v2 table.
   try {
-    const fullStmt = db.prepare(`
-      INSERT INTO reviews (
+    await runSql(db, CREATE_REVIEWS_V2_SQL);
+    const v2Stmt = db.prepare(`
+      INSERT INTO reviews_v2 (
         created_at, discord_user_id, discord_user_display,
         review, rating, webhook_status, webhook_error
       ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
     `).bind(...payload);
 
-    const fullRes = await fullStmt.run();
-    return fullRes?.meta?.last_row_id ?? null;
-  } catch (fullError) {
-    const fullMessage = fullError instanceof Error ? fullError.message : String(fullError);
+    const v2Res = await v2Stmt.run();
+    return v2Res?.meta?.last_row_id ?? null;
+  } catch (v2Error) {
+    const v2Message = v2Error instanceof Error ? v2Error.message : String(v2Error);
 
-    // 2) compatibility: legacy reviews without webhook_* columns
-    if (/webhook_status|webhook_error|no such column/i.test(fullMessage)) {
+    // 2) Legacy fallback: try old reviews table with full schema.
+    try {
+      const fullStmt = db.prepare(`
+        INSERT INTO reviews (
+          created_at, discord_user_id, discord_user_display,
+          review, rating, webhook_status, webhook_error
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+      `).bind(...payload);
+      const fullRes = await fullStmt.run();
+      return fullRes?.meta?.last_row_id ?? null;
+    } catch (fullError) {
+      const fullMessage = fullError instanceof Error ? fullError.message : String(fullError);
+
+      // 3) Deep legacy fallback: reviews without webhook_* columns.
       try {
         const legacyStmt = db.prepare(`
           INSERT INTO reviews (
@@ -172,26 +170,10 @@ export async function saveReview(db, row) {
 
         const legacyRes = await legacyStmt.run();
         return legacyRes?.meta?.last_row_id ?? null;
-      } catch {
-        // continue to reviews_v2 fallback
+      } catch (legacyError) {
+        const legacyMessage = legacyError instanceof Error ? legacyError.message : String(legacyError);
+        throw new Error(`saveReview failed: reviews_v2=${v2Message} | reviews=${fullMessage} | reviews_legacy=${legacyMessage}`);
       }
-    }
-
-    // 3) hard fallback: dedicated compatible table, create lazily if needed
-    try {
-      await runSql(db, CREATE_REVIEWS_V2_SQL);
-      const v2Stmt = db.prepare(`
-        INSERT INTO reviews_v2 (
-          created_at, discord_user_id, discord_user_display,
-          review, rating, webhook_status, webhook_error
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
-      `).bind(...payload);
-
-      const v2Res = await v2Stmt.run();
-      return v2Res?.meta?.last_row_id ?? null;
-    } catch (v2Error) {
-      const v2Message = v2Error instanceof Error ? v2Error.message : String(v2Error);
-      throw new Error(`saveReview failed on reviews and reviews_v2: ${fullMessage} | ${v2Message}`);
     }
   }
 }
@@ -200,29 +182,36 @@ export async function listRecentReviews(db, limit = 24) {
   if (!db) return [];
 
   const n = Math.max(1, Math.min(100, Number(limit) || 24));
+  const out = [];
 
   try {
-    const out = await db.prepare(`
+    const v2 = await db.prepare(`
+      SELECT id, created_at, discord_user_id, discord_user_display, review, rating
+      FROM reviews_v2
+      ORDER BY id DESC
+      LIMIT ?1
+    `).bind(n).all();
+
+    if (Array.isArray(v2?.results)) out.push(...v2.results);
+  } catch {
+    // continue
+  }
+
+  try {
+    const legacy = await db.prepare(`
       SELECT id, created_at, discord_user_id, discord_user_display, review, rating
       FROM reviews
       ORDER BY id DESC
       LIMIT ?1
     `).bind(n).all();
 
-    const items = Array.isArray(out?.results) ? out.results : [];
-    if (items.length > 0) return items;
+    if (Array.isArray(legacy?.results)) out.push(...legacy.results);
   } catch {
-    // fallback to reviews_v2 below
+    // continue
   }
 
-  const v2Out = await db.prepare(`
-    SELECT id, created_at, discord_user_id, discord_user_display, review, rating
-    FROM reviews_v2
-    ORDER BY id DESC
-    LIMIT ?1
-  `).bind(n).all();
-
-  return Array.isArray(v2Out?.results) ? v2Out.results : [];
+  out.sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
+  return out.slice(0, n);
 }
 
 export async function deleteReviewById(db, id) {
@@ -466,18 +455,3 @@ async function tableExists(db, tableName) {
   throw new Error("unsupported query API shape");
 }
 
-async function listTableColumns(db, tableName) {
-  const stmt = db.prepare(`PRAGMA table_info(${escapeSqlIdentifier(tableName)})`);
-
-  if (typeof stmt.all === "function") {
-    const out = await stmt.all();
-    const rows = Array.isArray(out?.results) ? out.results : [];
-    return new Set(rows.map((row) => String(row.name || "")).filter(Boolean));
-  }
-
-  throw new Error("unsupported query API shape");
-}
-
-function escapeSqlIdentifier(name) {
-  return String(name || "").replace(/[^a-zA-Z0-9_]/g, "");
-}
