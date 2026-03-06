@@ -7,6 +7,16 @@ export async function onRequestPost({ request, env }) {
       return json({ ok: false, error: "Musisz zalogować się przez Discord, aby wysłać wiadomość." }, 401);
     }
 
+    const originError = validateOrigin(request);
+    if (originError) {
+      return json({ ok: false, error: originError }, 403);
+    }
+
+    const ct = request.headers.get("content-type") || "";
+    if (!ct.includes("application/json")) {
+      return json({ ok: false, error: "Nieprawidłowy typ danych." }, 415);
+    }
+
     const data = await request.json();
 
     const name = String(user.global_name || user.username || "").trim();
@@ -63,6 +73,32 @@ export async function onRequestPost({ request, env }) {
   } catch {
     return json({ ok: false, error: "Błąd serwera." }, 500);
   }
+}
+
+function validateOrigin(request) {
+  const origin = request.headers.get("origin");
+  const referer = request.headers.get("referer");
+  const url = new URL(request.url);
+
+  if (origin) {
+    try {
+      const o = new URL(origin);
+      if (o.host !== url.host) return "Niedozwolone źródło żądania.";
+    } catch {
+      return "Niedozwolone źródło żądania.";
+    }
+  }
+
+  if (referer) {
+    try {
+      const r = new URL(referer);
+      if (r.host !== url.host) return "Niedozwolone źródło żądania.";
+    } catch {
+      return "Niedozwolone źródło żądania.";
+    }
+  }
+
+  return null;
 }
 
 function json(obj, status = 200) {
