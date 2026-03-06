@@ -46,6 +46,7 @@ const ADD_REVIEWS_WEBHOOK_STATUS_SQL = `ALTER TABLE reviews ADD COLUMN webhook_s
 const ADD_REVIEWS_WEBHOOK_ERROR_SQL = `ALTER TABLE reviews ADD COLUMN webhook_error TEXT`;
 
 const PREFERRED_BINDING_KEYS = ["DB", "WHITECODE_PROD", "whitecode_prod", "whitecode-prod", "D1", "DATABASE"];
+const CANDIDATE_HINTS_ENV_KEY = "D1_BINDING_CANDIDATES";
 
 export async function ensureSchema(db) {
   if (!db) return;
@@ -331,9 +332,16 @@ export function resolveD1DatabaseInfo(env) {
 function listD1Candidates(env) {
   if (!env || typeof env !== "object") return [];
 
-  return Object.entries(env)
-    .filter(([, value]) => isD1Binding(value))
-    .map(([name, value]) => ({ name, value }));
+  const names = collectEnvKeyCandidates(env);
+  const out = [];
+  for (const name of names) {
+    const value = safeGetEnvKey(env, name);
+    if (isD1Binding(value)) {
+      out.push({ name, value });
+    }
+  }
+
+  return out;
 }
 
 function listD1CandidatesForProbe(env) {
@@ -341,12 +349,13 @@ function listD1CandidatesForProbe(env) {
   const added = new Set();
 
   const configuredBindingName = String(env?.D1_BINDING_NAME || "").trim();
+  const hintedNames = parseBindingCandidateHints(env?.[CANDIDATE_HINTS_ENV_KEY]);
   const preferred = configuredBindingName
-    ? [configuredBindingName, ...PREFERRED_BINDING_KEYS]
-    : [...PREFERRED_BINDING_KEYS];
+    ? [configuredBindingName, ...hintedNames, ...PREFERRED_BINDING_KEYS]
+    : [...hintedNames, ...PREFERRED_BINDING_KEYS];
 
   for (const key of preferred) {
-    const cand = env?.[key];
+    const cand = safeGetEnvKey(env, key);
     if (isD1Binding(cand) && !added.has(key)) {
       out.push({ name: key, value: cand });
       added.add(key);
@@ -361,6 +370,51 @@ function listD1CandidatesForProbe(env) {
   }
 
   return out;
+}
+
+
+function collectEnvKeyCandidates(env) {
+  const names = new Set();
+
+  try {
+    for (const name of Object.keys(env || {})) {
+      if (typeof name === "string" && name) names.add(name);
+    }
+  } catch {
+    // ignore
+  }
+
+  try {
+    for (const key of Reflect.ownKeys(env || {})) {
+      if (typeof key === "string" && key) names.add(key);
+    }
+  } catch {
+    // ignore
+  }
+
+  const configured = String(env?.D1_BINDING_NAME || "").trim();
+  if (configured) names.add(configured);
+
+  for (const key of PREFERRED_BINDING_KEYS) names.add(key);
+  for (const key of parseBindingCandidateHints(env?.[CANDIDATE_HINTS_ENV_KEY])) names.add(key);
+
+  return Array.from(names);
+}
+
+function parseBindingCandidateHints(raw) {
+  return String(raw || "")
+    .split(",")
+    .map((it) => it.trim())
+    .filter(Boolean);
+}
+
+function safeGetEnvKey(env, key) {
+  if (!env || typeof env !== "object") return undefined;
+  try {
+    return env[key];
+  } catch {
+    return undefined;
+  }
 }
 
 function listD1CandidateNames(env) {

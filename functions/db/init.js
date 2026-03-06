@@ -6,8 +6,8 @@ export async function onRequestGet({ env }) {
     const db = dbInfo.db;
     if (!db) {
       const hint = (dbInfo.reason === "ambiguous" || dbInfo.reason === "probe_failed")
-        ? `Wykryto wiele bindingów D1 (${dbInfo.candidates.join(", ")}). Ustaw D1_BINDING_NAME.`
-        : "Ustaw poprawny D1 binding lub D1_BINDING_NAME.";
+        ? `Wykryto wiele bindingów D1 (${dbInfo.candidates.join(", ")}). Ustaw D1_BINDING_NAME lub D1_BINDING_CANDIDATES.`
+        : "Ustaw poprawny D1 binding, D1_BINDING_NAME lub D1_BINDING_CANDIDATES.";
 
       return json({
         ok: false,

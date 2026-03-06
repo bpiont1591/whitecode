@@ -9,6 +9,7 @@ Aby formularz działał tylko po logowaniu Discord OAuth i wysyłał dane użytk
 - `DISCORD_REDIRECT_URI` – np. `https://whitecode.pl/auth/discord/callback`
 - `SESSION_SECRET` – długi losowy sekret do podpisywania sesji cookie
 - `D1_BINDING_NAME` – *(opcjonalnie)* nazwa bindingu D1, jeśli nie używasz standardowej nazwy `DB`
+- `D1_BINDING_CANDIDATES` – *(opcjonalnie)* lista nazw bindingów D1 rozdzielona przecinkami (np. `MY_DB,PROD_DB`)
 
 ## Endpointy auth
 - `GET /auth/discord/start`
