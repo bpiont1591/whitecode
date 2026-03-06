@@ -36,7 +36,13 @@ export async function onRequestPost({ request, env }) {
       return json({ ok: false, error: "Brak DISCORD_GUILD_ID lub DISCORD_BOT_TOKEN w konfiguracji." }, 500);
     }
 
-    const member = await fetchGuildMember(guildId, user.sub, botToken);
+    let member;
+    try {
+      member = await fetchGuildMember(guildId, user.sub, botToken);
+    } catch {
+      return json({ ok: false, error: "Nie udało się zweryfikować ról Discord. Sprawdź DISCORD_BOT_TOKEN, DISCORD_GUILD_ID i uprawnienia bota." }, 502);
+    }
+
     if (!member) {
       return json({ ok: false, error: "Musisz być członkiem naszego serwera Discord." }, 403);
     }
@@ -96,8 +102,9 @@ export async function onRequestPost({ request, env }) {
       }
     }
 
-    await ensureSchema(db);
-    await saveReview(db, {
+    try {
+      await ensureSchema(db);
+      await saveReview(db, {
         created_at: createdAt,
         discord_user_id: safe(user.sub),
         discord_user_display: discordDisplay,
@@ -106,6 +113,9 @@ export async function onRequestPost({ request, env }) {
         webhook_status: webhookStatus,
         webhook_error: webhookError
       });
+    } catch {
+      return json({ ok: false, error: "Nie udało się zapisać opinii do bazy D1. Sprawdź binding i uprawnienia bazy." }, 500);
+    }
 
     const reviewItem = {
       created_at: createdAt,
@@ -124,7 +134,7 @@ export async function onRequestPost({ request, env }) {
 
     return json({ ok: true, item: reviewItem });
   } catch {
-    return json({ ok: false, error: "Błąd serwera." }, 500);
+    return json({ ok: false, error: "Błąd serwera podczas dodawania opinii." }, 500);
   }
 }
 
