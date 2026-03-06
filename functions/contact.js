@@ -1,5 +1,4 @@
 import { readSessionUser } from "./_lib/auth.js";
-import { ensureSchema, resolveD1DatabaseForUsage, saveContactMessage } from "./_lib/db.js";
 
 export async function onRequestPost({ request, env }) {
   try {
@@ -43,9 +42,6 @@ export async function onRequestPost({ request, env }) {
       return json({ ok: false, error: "Brak DISCORD_WEBHOOK_URL w Cloudflare." }, 500);
     }
 
-    const dbInfo = await resolveD1DatabaseForUsage(env);
-    const db = dbInfo.db;
-
     const discordDisplay = formatDiscordUser(user);
     const createdAt = new Date().toISOString();
 
@@ -79,36 +75,8 @@ export async function onRequestPost({ request, env }) {
       webhookError = `HTTP ${res.status}`;
     }
 
-    let dbSaved = false;
-    if (db) {
-      try {
-        await ensureSchema(db);
-        await saveContactMessage(db, {
-          created_at: createdAt,
-          discord_user_id: safe(user.sub),
-          discord_user_display: discordDisplay,
-          form_name: safe(name),
-          form_contact: safe(contact),
-          topic: safe(topic),
-          message: safe(message),
-          webhook_status: webhookStatus,
-          webhook_error: webhookError
-        });
-        dbSaved = true;
-      } catch {
-        dbSaved = false;
-      }
-    }
-
     if (!res.ok) {
-      if (dbSaved) {
-        return json({ ok: false, error: "Discord webhook odrzucił żądanie, ale wiadomość została zapisana w bazie." }, 502);
-      }
-      return json({ ok: false, error: "Discord webhook odrzucił żądanie i nie udało się zapisać wiadomości do bazy." }, 502);
-    }
-
-    if (!dbSaved && db) {
-      return json({ ok: true, warning: "Wiadomość wysłana na Discord, ale nie udało się zapisać do bazy D1." });
+      return json({ ok: false, error: "Discord webhook odrzucił żądanie." }, 502);
     }
 
     return json({ ok: true });
