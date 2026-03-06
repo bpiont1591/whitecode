@@ -1,8 +1,6 @@
 import { readSessionUser } from "./_lib/auth.js";
 import { ensureSchema, resolveD1DatabaseForUsage, saveReview } from "./_lib/db.js";
 
-const DEFAULT_REVIEWER_ROLE_ID = "1448144394426388622";
-
 export async function onRequestPost({ request, env }) {
   try {
     const user = await readSessionUser(request, env);
@@ -28,28 +26,30 @@ export async function onRequestPost({ request, env }) {
       return json({ ok: false, error: "Wybierz ocenę od 1 do 5." }, 400);
     }
 
-    const guildId = env.DISCORD_GUILD_ID;
-    const botToken = env.DISCORD_BOT_TOKEN;
-    const reviewerRoleId = env.REVIEWER_ROLE_ID || DEFAULT_REVIEWER_ROLE_ID;
+    const reviewerRoleId = String(env.REVIEWER_ROLE_ID || "").trim();
+    if (reviewerRoleId) {
+      const guildId = env.DISCORD_GUILD_ID;
+      const botToken = env.DISCORD_BOT_TOKEN;
 
-    if (!guildId || !botToken) {
-      return json({ ok: false, error: "Brak DISCORD_GUILD_ID lub DISCORD_BOT_TOKEN w konfiguracji." }, 500);
-    }
+      if (!guildId || !botToken) {
+        return json({ ok: false, error: "Dla ograniczenia po roli ustaw DISCORD_GUILD_ID i DISCORD_BOT_TOKEN." }, 500);
+      }
 
-    let member;
-    try {
-      member = await fetchGuildMember(guildId, user.sub, botToken);
-    } catch {
-      return json({ ok: false, error: "Nie udało się zweryfikować ról Discord. Sprawdź DISCORD_BOT_TOKEN, DISCORD_GUILD_ID i uprawnienia bota." }, 502);
-    }
+      let member;
+      try {
+        member = await fetchGuildMember(guildId, user.sub, botToken);
+      } catch {
+        return json({ ok: false, error: "Nie udało się zweryfikować ról Discord. Sprawdź DISCORD_BOT_TOKEN, DISCORD_GUILD_ID i uprawnienia bota." }, 502);
+      }
 
-    if (!member) {
-      return json({ ok: false, error: "Musisz być członkiem naszego serwera Discord." }, 403);
-    }
+      if (!member) {
+        return json({ ok: false, error: "Musisz być członkiem naszego serwera Discord." }, 403);
+      }
 
-    const roles = Array.isArray(member.roles) ? member.roles : [];
-    if (!roles.includes(reviewerRoleId)) {
-      return json({ ok: false, error: "Tylko osoby z odpowiednią rangą mogą dodać opinię." }, 403);
+      const roles = Array.isArray(member.roles) ? member.roles : [];
+      if (!roles.includes(reviewerRoleId)) {
+        return json({ ok: false, error: "Tylko osoby z odpowiednią rangą mogą dodać opinię." }, 403);
+      }
     }
 
     const webhookUrl = env.REVIEW_WEBHOOK_URL || env.DISCORD_WEBHOOK_URL;

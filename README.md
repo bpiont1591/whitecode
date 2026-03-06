@@ -34,11 +34,11 @@ W panelu Discord Developer Portal:
 
 
 ## Ograniczenie dodawania opinii po roli Discord
-Dodany endpoint `POST /review` wymaga:
-- zalogowanego użytkownika Discord,
-- członkostwa w serwerze (`DISCORD_GUILD_ID`),
-- posiadania roli recenzenta (`REVIEWER_ROLE_ID`, domyślnie `1448144394426388622`),
-- tokenu bota (`DISCORD_BOT_TOKEN`) do weryfikacji ról przez Discord API.
+Dodany endpoint `POST /review` wymaga zalogowanego użytkownika Discord.
+
+Ograniczenie po roli Discord jest opcjonalne:
+- ustaw `REVIEWER_ROLE_ID`, aby wymusić konkretną rolę,
+- wtedy wymagane są też `DISCORD_GUILD_ID` i `DISCORD_BOT_TOKEN` do weryfikacji przez Discord API.
 
 Opcjonalnie możesz ustawić osobny webhook dla opinii:
 - `REVIEW_WEBHOOK_URL` (fallback: `DISCORD_WEBHOOK_URL`).
