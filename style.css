@@ -208,7 +208,6 @@ h1 span { color: var(--accent-strong); text-shadow: 0 0 22px rgba(228, 235, 255,
 }
 
 .card,
-.review-card,
 .panel,
 .contact-card,
 .timeline-item {
@@ -223,7 +222,6 @@ h1 span { color: var(--accent-strong); text-shadow: 0 0 22px rgba(228, 235, 255,
 }
 
 .card:hover,
-.review-card:hover,
 .contact-card:hover,
 .timeline-item:hover {
   transform: translateY(-4px);
@@ -337,83 +335,10 @@ h1 span { color: var(--accent-strong); text-shadow: 0 0 22px rgba(228, 235, 255,
 
 .timeline-item p { color: var(--muted); }
 
-.reviews { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
-
-.reviews-track {
-  display: flex;
-  gap: 14px;
-  overflow-x: auto;
-  scroll-behavior: smooth;
-  padding-bottom: 6px;
-  scrollbar-width: thin;
-}
-
-.reviews-track.is-scrollable {
-  cursor: ew-resize;
-}
-
-.reviews-track .review-card {
-  flex: 0 0 min(360px, 85vw);
-}
-
-
-.live-reviews-panel {
-  margin-top: 16px;
-  border: 1px solid var(--line);
-  background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
-}
-
-.review-submit-panel {
-  margin-top: 18px;
-  max-width: 820px;
-  margin-left: auto;
-  margin-right: auto;
-  border: 1px solid rgba(228,235,255,0.22);
-  background: radial-gradient(circle at 0% 0%, rgba(159,183,255,0.14), transparent 42%), var(--card);
-}
-
-.review-submit-title {
-  margin-bottom: 6px;
-}
-
-.review-fields {
-  display: grid;
-  gap: 12px;
-}
-
-.review-form {
-  display: grid;
-  gap: 12px;
-}
-
-.review-form textarea {
-  min-height: 130px;
-}
-
-.rating-meta {
-  color: var(--muted);
-  font-size: 0.82rem;
-  margin-left: 6px;
-}
-
-
-.review-form code {
-  color: var(--accent-strong);
-}
-
-
-.client-role {
-  font-weight: 900;
-  color: var(--accent-strong);
-  letter-spacing: .2px;
-}
-
 .status-box:empty {
   display: none;
 }
 
-.review-card { padding: 20px; }
-.review-header { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
 .avatar {
   width: 44px;
   height: 44px;
@@ -422,10 +347,6 @@ h1 span { color: var(--accent-strong); text-shadow: 0 0 22px rgba(228, 235, 255,
   place-items: center;
   background: rgba(255,255,255,0.10);
 }
-.review-meta,
-.review-text { color: var(--muted); }
-.stars { color: #fff; margin-bottom: 8px; font-size: 0.9rem; }
-
 .contact-grid {
   display: grid;
   grid-template-columns: 320px 1fr;

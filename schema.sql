@@ -1,2 +1,0 @@
--- System opini został usunięty z projektu.
--- Brak aktywnego schematu tabel opini.
