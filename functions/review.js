@@ -1,5 +1,5 @@
 import { readSessionUser } from "./_lib/auth.js";
-import { ensureSchema, resolveD1DatabaseInfo, saveReview } from "./_lib/db.js";
+import { ensureSchema, resolveD1DatabaseForUsage, saveReview } from "./_lib/db.js";
 
 const DEFAULT_REVIEWER_ROLE_ID = "1448144394426388622";
 
@@ -53,10 +53,10 @@ export async function onRequestPost({ request, env }) {
     }
 
     const webhookUrl = env.REVIEW_WEBHOOK_URL || env.DISCORD_WEBHOOK_URL;
-    const dbInfo = resolveD1DatabaseInfo(env);
+    const dbInfo = await resolveD1DatabaseForUsage(env);
     const db = dbInfo.db;
     if (!db) {
-      const hint = dbInfo.reason === "ambiguous"
+      const hint = (dbInfo.reason === "ambiguous" || dbInfo.reason === "probe_failed")
         ? `Wykryto wiele bindingów D1 (${dbInfo.candidates.join(", ")}). Ustaw D1_BINDING_NAME.`
         : "Ustaw D1 binding (np. DB) lub env D1_BINDING_NAME=twoja_nazwa_bindingu.";
       return json({ ok: false, error: `Brak bindowania D1 w Functions. ${hint}` }, 500);

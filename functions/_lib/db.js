@@ -104,14 +104,43 @@ export function resolveD1Database(env) {
   return resolveD1DatabaseInfo(env).db;
 }
 
+export async function resolveD1DatabaseForUsage(env) {
+  const info = resolveD1DatabaseInfo(env);
+  if (info.db) return info;
+
+  if (info.reason === "configured_not_found" || info.reason === "no_candidates" || info.reason === "invalid_env") {
+    return info;
+  }
+
+  const entries = listD1Candidates(env);
+  for (const entry of entries) {
+    try {
+      await ensureSchema(entry.value);
+      return {
+        db: entry.value,
+        bindingName: entry.name,
+        reason: info.reason === "ambiguous" ? "auto_probe_ambiguous" : "auto_probe",
+        candidates: entries.map((it) => it.name)
+      };
+    } catch {
+      // try next candidate
+    }
+  }
+
+  return {
+    db: null,
+    bindingName: null,
+    reason: "probe_failed",
+    candidates: entries.map((it) => it.name)
+  };
+}
+
 export function resolveD1DatabaseInfo(env) {
   if (!env || typeof env !== "object") {
     return { db: null, bindingName: null, reason: "invalid_env", candidates: [] };
   }
 
-  const candidates = Object.entries(env)
-    .filter(([, value]) => isD1Binding(value))
-    .map(([name, value]) => ({ name, value }));
+  const candidates = listD1Candidates(env);
 
   const configuredBindingName = String(env.D1_BINDING_NAME || "").trim();
   if (configuredBindingName) {
@@ -147,6 +176,14 @@ export function resolveD1DatabaseInfo(env) {
   }
 
   return { db: null, bindingName: null, reason: "no_candidates", candidates: [] };
+}
+
+function listD1Candidates(env) {
+  if (!env || typeof env !== "object") return [];
+
+  return Object.entries(env)
+    .filter(([, value]) => isD1Binding(value))
+    .map(([name, value]) => ({ name, value }));
 }
 
 function isD1Binding(obj) {
