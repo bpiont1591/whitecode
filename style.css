@@ -360,6 +360,17 @@ h1 span { color: var(--accent-strong); text-shadow: 0 0 22px rgba(228, 235, 255,
   color: var(--accent-strong);
 }
 
+
+.client-role {
+  font-weight: 900;
+  color: var(--accent-strong);
+  letter-spacing: .2px;
+}
+
+.status-box:empty {
+  display: none;
+}
+
 .review-card { padding: 20px; }
 .review-header { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
 .avatar {
@@ -472,7 +483,8 @@ textarea { min-height: 150px; resize: vertical; }
 .btn-wide { width: 100%; }
 
 .status-box {
-  min-height: 22px;
+  margin-top: 4px;
+  min-height: 0;
   padding: 10px 12px;
   border-radius: 12px;
   border: 1px solid var(--line);
