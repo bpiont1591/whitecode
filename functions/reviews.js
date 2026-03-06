@@ -1,41 +1,35 @@
-import { ensureSchema, hasD1HttpConfig, listRecentReviews, listRecentReviewsViaHttp, resolveD1DatabaseForUsage } from "./_lib/db.js";
+import { getProfile } from "./_lib/db.js";
 
-const RECENT_REVIEWS = globalThis.__WHITECODE_RECENT_REVIEWS__ || (globalThis.__WHITECODE_RECENT_REVIEWS__ = []);
+const DEFAULT_PROFILE = "whitecode";
 
-export async function onRequestGet({ env }) {
+export async function onRequestGet({ request, env }) {
   try {
-    const dbInfo = await resolveD1DatabaseForUsage(env);
-    const db = dbInfo.db;
+    const url = new URL(request.url);
+    const profileSlug = String(url.searchParams.get("profile") || env.DEFAULT_PROFILE_SLUG || DEFAULT_PROFILE).trim().toLowerCase();
 
-    if (!db) {
-      if (hasD1HttpConfig(env)) {
-        const items = await listRecentReviewsViaHttp(env, 24);
-        return json({ ok: true, items, warning: "Odczyt przez D1 HTTP API (fallback bez bindingu)." });
-      }
-
-      return json({ ok: true, items: RECENT_REVIEWS.slice(0, 24), warning: "Brak D1 — pokazuję listę z pamięci runtime." });
+    const profile = await getProfile(env, profileSlug);
+    if (!profile) {
+      return json({ ok: true, items: [] });
     }
 
-    try {
-      await ensureSchema(db);
-    } catch {
-      // continue and try direct read from reviews
-    }
+    const items = (profile.reviews || []).slice(0, 24).map((row) => ({
+      created_at: row.created_at,
+      discord_user_id: String(row.reviewer_account || "").replace(/^dc_/, ""),
+      discord_user_display: row.reviewer_display || row.reviewer_account || "Użytkownik",
+      review: row.reason || "",
+      rating: fromLegacyRating(row.rating)
+    }));
 
-    const items = await listRecentReviews(db, 24);
     return json({ ok: true, items });
   } catch {
-    try {
-      if (hasD1HttpConfig(env)) {
-        const items = await listRecentReviewsViaHttp(env, 24);
-        return json({ ok: true, items, warning: "Odczyt przez D1 HTTP API (fallback po błędzie bindingu)." });
-      }
-    } catch {
-      // ignore
-    }
-
-    return json({ ok: true, items: RECENT_REVIEWS.slice(0, 24), warning: "Błąd odczytu D1 — pokazuję listę z pamięci runtime." });
+    return json({ ok: false, error: "Nie udało się pobrać opinii." }, 500);
   }
+}
+
+function fromLegacyRating(rating) {
+  if (rating === "scam") return 1;
+  if (rating === "sold") return 3;
+  return 5;
 }
 
 function json(obj, status = 200) {

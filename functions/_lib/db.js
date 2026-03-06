@@ -1,559 +1,537 @@
-const initializedSchemas = new WeakSet();
+const DB_FILE_CACHE = globalThis.__WC_DB_FILE_CACHE__ || (globalThis.__WC_DB_FILE_CACHE__ = new Map());
+const MEM_DB = globalThis.__WC_MEM_DB__ || (globalThis.__WC_MEM_DB__ = createEmptyState());
+const SCHEMA_READY = new WeakSet();
 
-const CREATE_CONTACT_MESSAGES_SQL = `
-  CREATE TABLE IF NOT EXISTS contact_messages (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    created_at TEXT NOT NULL,
-    discord_user_id TEXT NOT NULL,
-    discord_user_display TEXT NOT NULL,
-    form_name TEXT NOT NULL,
-    form_contact TEXT NOT NULL,
-    topic TEXT NOT NULL,
-    message TEXT NOT NULL,
-    webhook_status TEXT NOT NULL DEFAULT 'pending',
-    webhook_error TEXT
-  )
-`;
+const CREATE_PROFILES_SQL = `
+CREATE TABLE IF NOT EXISTS profiles (
+  slug TEXT PRIMARY KEY,
+  owner_account TEXT NOT NULL UNIQUE,
+  owner_display TEXT,
+  owner_avatar TEXT,
+  owner_bio TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL,
+  updated_at TEXT
+)`;
 
 const CREATE_REVIEWS_SQL = `
-  CREATE TABLE IF NOT EXISTS reviews (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    created_at TEXT NOT NULL,
-    discord_user_id TEXT NOT NULL,
-    discord_user_display TEXT NOT NULL,
-    review TEXT NOT NULL,
-    rating INTEGER NOT NULL DEFAULT 5,
-    webhook_status TEXT NOT NULL DEFAULT 'pending',
-    webhook_error TEXT
-  )
-`;
+CREATE TABLE IF NOT EXISTS reviews (
+  id TEXT PRIMARY KEY,
+  profile_slug TEXT NOT NULL,
+  rating TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  reviewer_account TEXT NOT NULL,
+  reviewer_display TEXT,
+  reviewer_avatar TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT,
+  UNIQUE(profile_slug, reviewer_account)
+)`;
 
-const CREATE_REVIEWS_V2_SQL = `
-  CREATE TABLE IF NOT EXISTS reviews_v2 (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    created_at TEXT NOT NULL,
-    discord_user_id TEXT NOT NULL,
-    discord_user_display TEXT NOT NULL,
-    review TEXT NOT NULL,
-    rating INTEGER NOT NULL DEFAULT 5,
-    webhook_status TEXT NOT NULL DEFAULT 'pending',
-    webhook_error TEXT
-  )
-`;
+const CREATE_REPORTS_SQL = `
+CREATE TABLE IF NOT EXISTS reports (
+  id TEXT PRIMARY KEY,
+  profile_slug TEXT NOT NULL,
+  review_id TEXT NOT NULL,
+  reported_by TEXT NOT NULL,
+  reason TEXT,
+  status TEXT NOT NULL DEFAULT 'open',
+  created_at TEXT NOT NULL,
+  updated_at TEXT
+)`;
 
-const ADD_REVIEWS_RATING_SQL = `ALTER TABLE reviews ADD COLUMN rating INTEGER NOT NULL DEFAULT 5`;
-const ADD_REVIEWS_WEBHOOK_STATUS_SQL = `ALTER TABLE reviews ADD COLUMN webhook_status TEXT NOT NULL DEFAULT 'pending'`;
-const ADD_REVIEWS_WEBHOOK_ERROR_SQL = `ALTER TABLE reviews ADD COLUMN webhook_error TEXT`;
+const CREATE_BLOCKED_SQL = `
+CREATE TABLE IF NOT EXISTS blocked_accounts (
+  account TEXT PRIMARY KEY,
+  blocked INTEGER NOT NULL DEFAULT 1,
+  reason TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT
+)`;
 
-const PREFERRED_BINDING_KEYS = ["DB", "WHITECODE_PROD", "whitecode_prod", "whitecode-prod", "D1", "DATABASE"];
-const CANDIDATE_HINTS_ENV_KEY = "D1_BINDING_CANDIDATES";
+const CREATE_MESSAGE_BLOCKS_SQL = `
+CREATE TABLE IF NOT EXISTS message_blocks (
+  id TEXT PRIMARY KEY,
+  profile_slug TEXT NOT NULL,
+  account TEXT NOT NULL,
+  reason TEXT,
+  created_at TEXT NOT NULL,
+  UNIQUE(profile_slug, account)
+)`;
 
-export async function ensureSchema(db) {
-  if (!db) return;
-  if (initializedSchemas.has(db)) return;
-
-  await runSql(db, CREATE_CONTACT_MESSAGES_SQL);
-  await runSql(db, CREATE_REVIEWS_SQL);
-  await runSql(db, CREATE_REVIEWS_V2_SQL);
-
-  // migration for existing tables without rating column
-  try {
-    await runSql(db, ADD_REVIEWS_RATING_SQL);
-  } catch {
-    // column probably already exists
-  }
-
-  try {
-    await runSql(db, ADD_REVIEWS_WEBHOOK_STATUS_SQL);
-  } catch {
-    // column probably already exists
-  }
-
-  try {
-    await runSql(db, ADD_REVIEWS_WEBHOOK_ERROR_SQL);
-  } catch {
-    // column probably already exists
-  }
-
-  const contactOk = await tableExists(db, "contact_messages");
-  const reviewsOk = await tableExists(db, "reviews");
-  const reviewsV2Ok = await tableExists(db, "reviews_v2");
-  if (!contactOk || !reviewsOk || !reviewsV2Ok) {
-    throw new Error("schema verification failed");
-  }
-
-  // Prefer resilient writes to reviews_v2; legacy reviews may have drifted schema.
-
-  initializedSchemas.add(db);
-}
-
-export async function saveContactMessage(db, row) {
-  if (!db) return null;
-
-  const stmt = db.prepare(`
-    INSERT INTO contact_messages (
-      created_at, discord_user_id, discord_user_display,
-      form_name, form_contact, topic, message,
-      webhook_status, webhook_error
-    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
-  `).bind(
-    row.created_at,
-    row.discord_user_id,
-    row.discord_user_display,
-    row.form_name,
-    row.form_contact,
-    row.topic,
-    row.message,
-    row.webhook_status,
-    row.webhook_error ?? null
-  );
-
-  const res = await stmt.run();
-  return res?.meta?.last_row_id ?? null;
-}
-
-export async function saveReview(db, row) {
-  if (!db) return null;
-
-  const payload = [
-    row.created_at,
-    row.discord_user_id,
-    row.discord_user_display,
-    row.review,
-    row.rating,
-    row.webhook_status,
-    row.webhook_error ?? null
-  ];
-
-  // 1) Primary durable path: canonical reviews_v2 table.
-  try {
-    await runSql(db, CREATE_REVIEWS_V2_SQL);
-    const v2Stmt = db.prepare(`
-      INSERT INTO reviews_v2 (
-        created_at, discord_user_id, discord_user_display,
-        review, rating, webhook_status, webhook_error
-      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
-    `).bind(...payload);
-
-    const v2Res = await v2Stmt.run();
-    return v2Res?.meta?.last_row_id ?? null;
-  } catch (v2Error) {
-    const v2Message = v2Error instanceof Error ? v2Error.message : String(v2Error);
-
-    // 2) Legacy fallback: try old reviews table with full schema.
-    try {
-      const fullStmt = db.prepare(`
-        INSERT INTO reviews (
-          created_at, discord_user_id, discord_user_display,
-          review, rating, webhook_status, webhook_error
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
-      `).bind(...payload);
-      const fullRes = await fullStmt.run();
-      return fullRes?.meta?.last_row_id ?? null;
-    } catch (fullError) {
-      const fullMessage = fullError instanceof Error ? fullError.message : String(fullError);
-
-      // 3) Deep legacy fallback: reviews without webhook_* columns.
-      try {
-        const legacyStmt = db.prepare(`
-          INSERT INTO reviews (
-            created_at, discord_user_id, discord_user_display,
-            review, rating
-          ) VALUES (?1, ?2, ?3, ?4, ?5)
-        `).bind(
-          row.created_at,
-          row.discord_user_id,
-          row.discord_user_display,
-          row.review,
-          row.rating
-        );
-
-        const legacyRes = await legacyStmt.run();
-        return legacyRes?.meta?.last_row_id ?? null;
-      } catch (legacyError) {
-        const legacyMessage = legacyError instanceof Error ? legacyError.message : String(legacyError);
-        throw new Error(`saveReview failed: reviews_v2=${v2Message} | reviews=${fullMessage} | reviews_legacy=${legacyMessage}`);
-      }
-    }
-  }
-}
-
-export async function listRecentReviews(db, limit = 24) {
-  if (!db) return [];
-
-  const n = Math.max(1, Math.min(100, Number(limit) || 24));
-  const out = [];
-
-  try {
-    const v2 = await db.prepare(`
-      SELECT id, created_at, discord_user_id, discord_user_display, review, rating
-      FROM reviews_v2
-      ORDER BY id DESC
-      LIMIT ?1
-    `).bind(n).all();
-
-    if (Array.isArray(v2?.results)) out.push(...v2.results);
-  } catch {
-    // continue
-  }
-
-  try {
-    const legacy = await db.prepare(`
-      SELECT id, created_at, discord_user_id, discord_user_display, review, rating
-      FROM reviews
-      ORDER BY id DESC
-      LIMIT ?1
-    `).bind(n).all();
-
-    if (Array.isArray(legacy?.results)) out.push(...legacy.results);
-  } catch {
-    // continue
-  }
-
-  out.sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
-  return out.slice(0, n);
-}
-
-export async function deleteReviewById(db, id) {
-  if (!db) return;
-
-  try {
-    await db.prepare(`DELETE FROM reviews WHERE id = ?1`).bind(id).run();
-  } catch {
-    // continue to v2 attempt
-  }
-
-  await db.prepare(`DELETE FROM reviews_v2 WHERE id = ?1`).bind(id).run();
-}
-
-
-
-export function hasD1HttpConfig(env) {
-  const accountId = String(env?.CF_ACCOUNT_ID || env?.CLOUDFLARE_ACCOUNT_ID || "").trim();
-  const dbId = String(env?.D1_DATABASE_ID || "").trim();
-  const apiToken = String(env?.CF_API_TOKEN || env?.CLOUDFLARE_API_TOKEN || "").trim();
-  return Boolean(accountId && dbId && apiToken);
-}
-
-export async function ensureSchemaViaHttp(env) {
-  await runD1HttpSql(env, CREATE_CONTACT_MESSAGES_SQL);
-  await runD1HttpSql(env, CREATE_REVIEWS_SQL);
-  await runD1HttpSql(env, CREATE_REVIEWS_V2_SQL);
-
-  try { await runD1HttpSql(env, ADD_REVIEWS_RATING_SQL); } catch {}
-  try { await runD1HttpSql(env, ADD_REVIEWS_WEBHOOK_STATUS_SQL); } catch {}
-  try { await runD1HttpSql(env, ADD_REVIEWS_WEBHOOK_ERROR_SQL); } catch {}
-}
-
-export async function saveReviewViaHttp(env, row) {
-  await ensureSchemaViaHttp(env);
-
-  const params = [
-    row.created_at,
-    row.discord_user_id,
-    row.discord_user_display,
-    row.review,
-    row.rating,
-    row.webhook_status,
-    row.webhook_error ?? null
-  ];
-
-  await runD1HttpSql(env, `
-    INSERT INTO reviews_v2 (
-      created_at, discord_user_id, discord_user_display,
-      review, rating, webhook_status, webhook_error
-    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
-  `, params);
-
-  const rowOut = await runD1HttpFirst(env, `SELECT last_insert_rowid() AS id`);
-  return Number(rowOut?.id || 0) || null;
-}
-
-export async function listRecentReviewsViaHttp(env, limit = 24) {
-  await ensureSchemaViaHttp(env);
-  const n = Math.max(1, Math.min(100, Number(limit) || 24));
-
-  const rows = await runD1HttpAll(env, `
-    SELECT id, created_at, discord_user_id, discord_user_display, review, rating
-    FROM reviews_v2
-    ORDER BY id DESC
-    LIMIT ?1
-  `, [n]);
-
-  return rows;
-}
-
-async function runD1HttpSql(env, sql, params = []) {
-  const out = await runD1HttpQuery(env, sql, params);
-  if (!out.success) {
-    throw new Error(out.errors?.[0]?.message || "d1 http sql failed");
-  }
-  return out;
-}
-
-async function runD1HttpAll(env, sql, params = []) {
-  const out = await runD1HttpSql(env, sql, params);
-  const first = Array.isArray(out.result) ? out.result[0] : null;
-  return Array.isArray(first?.results) ? first.results : [];
-}
-
-async function runD1HttpFirst(env, sql, params = []) {
-  const rows = await runD1HttpAll(env, sql, params);
-  return rows[0] || null;
-}
-
-async function runD1HttpQuery(env, sql, params = []) {
-  const accountId = String(env?.CF_ACCOUNT_ID || env?.CLOUDFLARE_ACCOUNT_ID || "").trim();
-  const dbId = String(env?.D1_DATABASE_ID || "").trim();
-  const apiToken = String(env?.CF_API_TOKEN || env?.CLOUDFLARE_API_TOKEN || "").trim();
-
-  if (!accountId || !dbId || !apiToken) {
-    throw new Error("missing D1 HTTP config (CF_ACCOUNT_ID/CLOUDFLARE_ACCOUNT_ID, D1_DATABASE_ID, CF_API_TOKEN/CLOUDFLARE_API_TOKEN)");
-  }
-
-  const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/d1/database/${dbId}/query`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiToken}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({ sql, params })
-  });
-
-  if (!res.ok) {
-    throw new Error(`D1 HTTP API error ${res.status}`);
-  }
-
-  return await res.json();
-}
-
-export function resolveD1Database(env) {
-  return resolveD1DatabaseInfo(env).db;
-}
+const INDEXES = [
+  `CREATE INDEX IF NOT EXISTS idx_reviews_profile_created ON reviews(profile_slug, created_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_reviews_reviewer ON reviews(reviewer_account)`,
+  `CREATE INDEX IF NOT EXISTS idx_reports_profile_status ON reports(profile_slug, status, created_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_reports_status ON reports(status, created_at DESC)`
+];
 
 export async function resolveD1DatabaseForUsage(env) {
-  const info = resolveD1DatabaseInfo(env);
-  if (info.db) return info;
+  const db = env?.DB && typeof env.DB.prepare === "function" ? env.DB : null;
+  if (!db) return { db: null, mode: "memory", reason: "missing_db_binding" };
+  return { db, mode: "d1", reason: "db_binding" };
+}
 
-  if (info.reason === "no_candidates" || info.reason === "invalid_env") {
-    return info;
+export async function ensureSchema(db) {
+  if (!db || SCHEMA_READY.has(db)) return;
+  await runSql(db, CREATE_PROFILES_SQL);
+  await runSql(db, CREATE_REVIEWS_SQL);
+  await runSql(db, CREATE_REPORTS_SQL);
+  await runSql(db, CREATE_BLOCKED_SQL);
+  await runSql(db, CREATE_MESSAGE_BLOCKS_SQL);
+  for (const sql of INDEXES) await runSql(db, sql);
+  SCHEMA_READY.add(db);
+}
+
+export async function ensureStorage(env) {
+  const info = await resolveD1DatabaseForUsage(env);
+  if (info.db) {
+    await ensureSchema(info.db);
+    return { mode: "d1", db: info.db, info };
   }
 
-  const entries = listD1CandidatesForProbe(env);
-  for (const entry of entries) {
-    try {
-      await ensureSchema(entry.value);
-      return {
-        db: entry.value,
-        bindingName: entry.name,
-        reason: info.reason.includes("ambiguous") ? "auto_probe_ambiguous" : "auto_probe",
-        candidates: entries.map((it) => it.name)
-      };
-    } catch {
-      // try next candidate
-    }
+  const fileStore = await tryLoadFileStore(env);
+  if (fileStore) {
+    return { mode: "file", state: fileStore.state, persist: fileStore.persist, info };
   }
 
+  return { mode: "memory", state: MEM_DB, persist: async () => {}, info };
+}
+
+export async function saveProfile(env, profile) {
+  const store = await ensureStorage(env);
+  if (store.mode === "d1") {
+    const now = isoNow();
+    await store.db.prepare(`
+      INSERT INTO profiles (slug, owner_account, owner_display, owner_avatar, owner_bio, created_at, updated_at)
+      VALUES (?1, ?2, ?3, ?4, ?5, ?6, NULL)
+      ON CONFLICT(slug) DO UPDATE SET
+        owner_display = excluded.owner_display,
+        owner_avatar = excluded.owner_avatar,
+        owner_bio = excluded.owner_bio,
+        updated_at = ?7
+    `).bind(
+      profile.slug,
+      profile.owner_account,
+      profile.owner_display || null,
+      profile.owner_avatar || null,
+      profile.owner_bio || "",
+      profile.created_at || now,
+      now
+    ).run();
+    return profile;
+  }
+
+  const state = store.state;
+  const idx = state.profiles.findIndex((p) => p.slug === profile.slug);
+  if (idx >= 0) {
+    state.profiles[idx] = { ...state.profiles[idx], ...profile, updated_at: isoNow() };
+  } else {
+    state.profiles.push({ ...profile, created_at: profile.created_at || isoNow(), updated_at: null });
+  }
+  await store.persist();
+  return profile;
+}
+
+export async function getProfile(env, slug) {
+  const store = await ensureStorage(env);
+  if (store.mode === "d1") {
+    const profile = await store.db.prepare(`SELECT * FROM profiles WHERE slug = ?1 LIMIT 1`).bind(slug).first();
+    if (!profile) return null;
+    const reviews = await store.db.prepare(`
+      SELECT id, profile_slug, rating, reason, reviewer_account, reviewer_display, reviewer_avatar, created_at, updated_at
+      FROM reviews WHERE profile_slug = ?1 ORDER BY created_at DESC LIMIT 200
+    `).bind(slug).all();
+    const reports = await store.db.prepare(`
+      SELECT id, profile_slug, review_id, reported_by, reason, status, created_at, updated_at
+      FROM reports WHERE profile_slug = ?1 ORDER BY created_at DESC LIMIT 200
+    `).bind(slug).all();
+    return {
+      ...profile,
+      reviews: rows(reviews),
+      reports: rows(reports)
+    };
+  }
+
+  const profile = store.state.profiles.find((p) => p.slug === slug);
+  if (!profile) return null;
   return {
-    db: null,
-    bindingName: null,
-    reason: "probe_failed",
-    candidates: entries.map((it) => it.name)
+    ...profile,
+    reviews: store.state.reviews.filter((r) => r.profile_slug === slug).sort(sortByCreatedDesc),
+    reports: store.state.reports.filter((r) => r.profile_slug === slug).sort(sortByCreatedDesc)
   };
 }
 
-export function resolveD1DatabaseInfo(env) {
-  if (!env || typeof env !== "object") {
-    return { db: null, bindingName: null, reason: "invalid_env", candidates: [] };
+export async function getProfileByOwner(env, ownerAccount) {
+  const store = await ensureStorage(env);
+  if (store.mode === "d1") {
+    const row = await store.db.prepare(`SELECT slug FROM profiles WHERE owner_account = ?1 LIMIT 1`).bind(ownerAccount).first();
+    return row?.slug || null;
+  }
+  const row = store.state.profiles.find((p) => p.owner_account === ownerAccount);
+  return row?.slug || null;
+}
+
+export async function deleteProfile(env, slug) {
+  const store = await ensureStorage(env);
+  if (store.mode === "d1") {
+    await store.db.prepare(`DELETE FROM reports WHERE profile_slug = ?1`).bind(slug).run();
+    await store.db.prepare(`DELETE FROM reviews WHERE profile_slug = ?1`).bind(slug).run();
+    await store.db.prepare(`DELETE FROM message_blocks WHERE profile_slug = ?1`).bind(slug).run();
+    const res = await store.db.prepare(`DELETE FROM profiles WHERE slug = ?1`).bind(slug).run();
+    return Number(res?.meta?.changes || 0) > 0;
   }
 
-  const candidateNames = listD1CandidateNames(env);
-  const configuredBindingName = String(env.D1_BINDING_NAME || "").trim();
-  const configuredExists = configuredBindingName && isD1Binding(env[configuredBindingName]);
+  const before = store.state.profiles.length;
+  store.state.profiles = store.state.profiles.filter((p) => p.slug !== slug);
+  store.state.reviews = store.state.reviews.filter((r) => r.profile_slug !== slug);
+  store.state.reports = store.state.reports.filter((r) => r.profile_slug !== slug);
+  store.state.message_blocks = store.state.message_blocks.filter((r) => r.profile_slug !== slug);
+  await store.persist();
+  return store.state.profiles.length !== before;
+}
 
-  if (configuredExists) {
-    return {
-      db: env[configuredBindingName],
-      bindingName: configuredBindingName,
-      reason: "configured",
-      candidates: candidateNames
-    };
-  }
+export async function updateProfileSettings(env, slug, { nextSlug, ownerBio }) {
+  const store = await ensureStorage(env);
+  if (store.mode === "d1") {
+    const duplicate = await store.db.prepare(`SELECT slug FROM profiles WHERE slug = ?1 LIMIT 1`).bind(nextSlug).first();
+    if (duplicate && duplicate.slug !== slug) return { ok: false, error: "slug_taken" };
 
-  for (const key of PREFERRED_BINDING_KEYS) {
-    const cand = env[key];
-    if (isD1Binding(cand)) {
-      return {
-        db: cand,
-        bindingName: key,
-        reason: configuredBindingName ? "configured_not_found_fallback" : "preferred",
-        candidates: candidateNames
-      };
+    await store.db.prepare(`
+      UPDATE profiles
+      SET slug = ?1, owner_bio = ?2, updated_at = ?3
+      WHERE slug = ?4
+    `).bind(nextSlug, ownerBio || "", isoNow(), slug).run();
+
+    if (nextSlug !== slug) {
+      await store.db.prepare(`UPDATE reviews SET profile_slug = ?1 WHERE profile_slug = ?2`).bind(nextSlug, slug).run();
+      await store.db.prepare(`UPDATE reports SET profile_slug = ?1 WHERE profile_slug = ?2`).bind(nextSlug, slug).run();
+      await store.db.prepare(`UPDATE message_blocks SET profile_slug = ?1 WHERE profile_slug = ?2`).bind(nextSlug, slug).run();
     }
+
+    return { ok: true, slug: nextSlug };
   }
 
-  const candidates = listD1Candidates(env);
-  if (candidates.length === 1) {
-    return {
-      db: candidates[0].value,
-      bindingName: candidates[0].name,
-      reason: configuredBindingName ? "configured_not_found_single_candidate" : "single_candidate",
-      candidates: candidates.map((c) => c.name)
-    };
+  const profile = store.state.profiles.find((p) => p.slug === slug);
+  if (!profile) return { ok: false, error: "profile_not_found" };
+  const duplicate = store.state.profiles.find((p) => p.slug === nextSlug && p.slug !== slug);
+  if (duplicate) return { ok: false, error: "slug_taken" };
+
+  profile.slug = nextSlug;
+  profile.owner_bio = ownerBio || "";
+  profile.updated_at = isoNow();
+  if (nextSlug !== slug) {
+    for (const r of store.state.reviews) if (r.profile_slug === slug) r.profile_slug = nextSlug;
+    for (const r of store.state.reports) if (r.profile_slug === slug) r.profile_slug = nextSlug;
+    for (const r of store.state.message_blocks) if (r.profile_slug === slug) r.profile_slug = nextSlug;
+  }
+  await store.persist();
+  return { ok: true, slug: nextSlug };
+}
+
+export async function saveReview(env, reviewRow) {
+  const store = await ensureStorage(env);
+  if (store.mode === "d1") {
+    const now = isoNow();
+    await store.db.prepare(`
+      INSERT INTO reviews (
+        id, profile_slug, rating, reason, reviewer_account, reviewer_display, reviewer_avatar, created_at, updated_at
+      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, NULL)
+      ON CONFLICT(profile_slug, reviewer_account) DO UPDATE SET
+        rating = excluded.rating,
+        reason = excluded.reason,
+        reviewer_display = excluded.reviewer_display,
+        reviewer_avatar = excluded.reviewer_avatar,
+        updated_at = ?9
+    `).bind(
+      reviewRow.id,
+      reviewRow.profile_slug,
+      reviewRow.rating,
+      reviewRow.reason,
+      reviewRow.reviewer_account,
+      reviewRow.reviewer_display || null,
+      reviewRow.reviewer_avatar || null,
+      reviewRow.created_at || now,
+      now
+    ).run();
+    return true;
   }
 
-  if (candidates.length > 1) {
+  const idx = store.state.reviews.findIndex((r) => r.profile_slug === reviewRow.profile_slug && r.reviewer_account === reviewRow.reviewer_account);
+  if (idx >= 0) {
+    store.state.reviews[idx] = { ...store.state.reviews[idx], ...reviewRow, updated_at: isoNow() };
+  } else {
+    store.state.reviews.push({ ...reviewRow, created_at: reviewRow.created_at || isoNow(), updated_at: null });
+  }
+  await store.persist();
+  return true;
+}
+
+
+
+export async function deleteReviewById(env, profileSlug, reviewId) {
+  const store = await ensureStorage(env);
+  if (store.mode === "d1") {
+    await store.db.prepare(`DELETE FROM reviews WHERE profile_slug = ?1 AND id = ?2`).bind(profileSlug, reviewId).run();
+    return true;
+  }
+  const before = store.state.reviews.length;
+  store.state.reviews = store.state.reviews.filter((r) => !(r.profile_slug === profileSlug && r.id === reviewId));
+  await store.persist();
+  return store.state.reviews.length !== before;
+}
+
+export async function createReport(env, reportRow) {
+  const store = await ensureStorage(env);
+  if (store.mode === "d1") {
+    await store.db.prepare(`
+      INSERT INTO reports (id, profile_slug, review_id, reported_by, reason, status, created_at, updated_at)
+      VALUES (?1, ?2, ?3, ?4, ?5, 'open', ?6, NULL)
+    `).bind(
+      reportRow.id,
+      reportRow.profile_slug,
+      reportRow.review_id,
+      reportRow.reported_by,
+      reportRow.reason || null,
+      reportRow.created_at || isoNow()
+    ).run();
+    return true;
+  }
+
+  store.state.reports.push({
+    ...reportRow,
+    reason: reportRow.reason || null,
+    status: "open",
+    created_at: reportRow.created_at || isoNow(),
+    updated_at: null
+  });
+  await store.persist();
+  return true;
+}
+
+export async function resolveReport(env, reportId) {
+  const store = await ensureStorage(env);
+  if (store.mode === "d1") {
+    await store.db.prepare(`UPDATE reports SET status = 'closed', updated_at = ?1 WHERE id = ?2`).bind(isoNow(), reportId).run();
+    return true;
+  }
+  const row = store.state.reports.find((r) => r.id === reportId);
+  if (!row) return false;
+  row.status = "closed";
+  row.updated_at = isoNow();
+  await store.persist();
+  return true;
+}
+
+export async function listOpenReportsGlobal(env) {
+  const store = await ensureStorage(env);
+  if (store.mode === "d1") {
+    const out = await store.db.prepare(`
+      SELECT r.id AS report_id, r.profile_slug, r.review_id, r.reported_by, r.reason, r.created_at,
+             rv.reviewer_account, rv.reviewer_display
+      FROM reports r
+      LEFT JOIN reviews rv ON rv.id = r.review_id
+      WHERE r.status = 'open'
+      ORDER BY r.created_at DESC
+      LIMIT 200
+    `).all();
+    return rows(out).map((r) => ({
+      reportId: r.report_id,
+      profileSlug: r.profile_slug,
+      reviewId: r.review_id,
+      reportedBy: r.reported_by,
+      reason: r.reason,
+      createdAt: r.created_at,
+      reviewerAccount: r.reviewer_account,
+      reviewerDisplay: r.reviewer_display,
+      blocked: false
+    }));
+  }
+
+  return store.state.reports
+    .filter((r) => r.status === "open")
+    .sort(sortByCreatedDesc)
+    .map((r) => {
+      const review = store.state.reviews.find((x) => x.id === r.review_id);
+      return {
+        reportId: r.id,
+        profileSlug: r.profile_slug,
+        reviewId: r.review_id,
+        reportedBy: r.reported_by,
+        reason: r.reason,
+        createdAt: r.created_at,
+        reviewerAccount: review?.reviewer_account || null,
+        reviewerDisplay: review?.reviewer_display || null,
+        blocked: false
+      };
+    });
+}
+
+export async function getAdminStats(env) {
+  const store = await ensureStorage(env);
+  if (store.mode === "d1") {
+    const [profiles, owners, reports, blocked] = await Promise.all([
+      store.db.prepare(`SELECT COUNT(*) AS c FROM profiles`).first(),
+      store.db.prepare(`SELECT COUNT(DISTINCT owner_account) AS c FROM profiles`).first(),
+      store.db.prepare(`SELECT COUNT(*) AS c FROM reports WHERE status = 'open'`).first(),
+      store.db.prepare(`SELECT COUNT(*) AS c FROM blocked_accounts WHERE blocked = 1`).first()
+    ]);
     return {
-      db: null,
-      bindingName: null,
-      reason: configuredBindingName ? "configured_not_found_ambiguous" : "ambiguous",
-      candidates: candidates.map((c) => c.name)
+      profilesCount: Number(profiles?.c || 0),
+      ownersCount: Number(owners?.c || 0),
+      openReportsCount: Number(reports?.c || 0),
+      blockedAccountsCount: Number(blocked?.c || 0)
     };
   }
 
   return {
-    db: null,
-    bindingName: null,
-    reason: configuredBindingName ? "configured_not_found" : "no_candidates",
-    candidates: []
+    profilesCount: store.state.profiles.length,
+    ownersCount: new Set(store.state.profiles.map((p) => p.owner_account)).size,
+    openReportsCount: store.state.reports.filter((r) => r.status === "open").length,
+    blockedAccountsCount: store.state.blocked_accounts.filter((x) => x.blocked).length
   };
 }
 
-function listD1Candidates(env) {
-  if (!env || typeof env !== "object") return [];
-
-  const names = collectEnvKeyCandidates(env);
-  const out = [];
-  for (const name of names) {
-    const value = safeGetEnvKey(env, name);
-    if (isD1Binding(value)) {
-      out.push({ name, value });
-    }
+export async function setBlockedAccount(env, { account, blocked, reason }) {
+  const store = await ensureStorage(env);
+  const blockFlag = blocked ? 1 : 0;
+  if (store.mode === "d1") {
+    await store.db.prepare(`
+      INSERT INTO blocked_accounts (account, blocked, reason, created_at, updated_at)
+      VALUES (?1, ?2, ?3, ?4, NULL)
+      ON CONFLICT(account) DO UPDATE SET blocked = ?2, reason = ?3, updated_at = ?5
+    `).bind(account, blockFlag, reason || null, isoNow(), isoNow()).run();
+    return true;
   }
 
-  return out;
-}
-
-function listD1CandidatesForProbe(env) {
-  const out = [];
-  const added = new Set();
-
-  const configuredBindingName = String(env?.D1_BINDING_NAME || "").trim();
-  const hintedNames = parseBindingCandidateHints(env?.[CANDIDATE_HINTS_ENV_KEY]);
-  const preferred = configuredBindingName
-    ? [configuredBindingName, ...hintedNames, ...PREFERRED_BINDING_KEYS]
-    : [...hintedNames, ...PREFERRED_BINDING_KEYS];
-
-  for (const key of preferred) {
-    const cand = safeGetEnvKey(env, key);
-    if (isD1Binding(cand) && !added.has(key)) {
-      out.push({ name: key, value: cand });
-      added.add(key);
-    }
+  const row = store.state.blocked_accounts.find((x) => x.account === account);
+  if (row) {
+    row.blocked = blockFlag;
+    row.reason = reason || null;
+    row.updated_at = isoNow();
+  } else {
+    store.state.blocked_accounts.push({ account, blocked: blockFlag, reason: reason || null, created_at: isoNow(), updated_at: null });
   }
+  await store.persist();
+  return true;
+}
 
-  for (const item of listD1Candidates(env)) {
-    if (!added.has(item.name)) {
-      out.push(item);
-      added.add(item.name);
-    }
+export async function isBlockedAccount(env, account) {
+  const store = await ensureStorage(env);
+  if (store.mode === "d1") {
+    const row = await store.db.prepare(`SELECT blocked FROM blocked_accounts WHERE account = ?1 LIMIT 1`).bind(account).first();
+    return Number(row?.blocked || 0) === 1;
   }
-
-  return out;
+  const row = store.state.blocked_accounts.find((x) => x.account === account);
+  return Number(row?.blocked || 0) === 1;
 }
 
-
-function collectEnvKeyCandidates(env) {
-  const names = new Set();
-
-  try {
-    for (const name of Object.keys(env || {})) {
-      if (typeof name === "string" && name) names.add(name);
-    }
-  } catch {
-    // ignore
-  }
-
-  try {
-    for (const key of Reflect.ownKeys(env || {})) {
-      if (typeof key === "string" && key) names.add(key);
-    }
-  } catch {
-    // ignore
-  }
-
-  const configured = String(env?.D1_BINDING_NAME || "").trim();
-  if (configured) names.add(configured);
-
-  for (const key of PREFERRED_BINDING_KEYS) names.add(key);
-  for (const key of parseBindingCandidateHints(env?.[CANDIDATE_HINTS_ENV_KEY])) names.add(key);
-
-  return Array.from(names);
+export function createReviewId() {
+  return `rvw_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
-function parseBindingCandidateHints(raw) {
-  return String(raw || "")
-    .split(",")
-    .map((it) => it.trim())
-    .filter(Boolean);
+export function createReportId() {
+  return `rpt_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
-function safeGetEnvKey(env, key) {
-  if (!env || typeof env !== "object") return undefined;
-  try {
-    return env[key];
-  } catch {
-    return undefined;
-  }
+export function normalizeAccountFromSession(user) {
+  return `dc_${String(user?.sub || "")}`;
 }
 
-function listD1CandidateNames(env) {
-  return listD1CandidatesForProbe(env).map((it) => it.name);
+export function normalizeDisplayFromSession(user) {
+  return String(user?.global_name || user?.username || "Użytkownik").trim();
 }
 
-function isD1Binding(obj) {
-  return Boolean(
-    obj &&
-    typeof obj === "object" &&
-    typeof obj.prepare === "function"
-  );
+export function normalizeAvatarFromSession(user) {
+  const id = String(user?.sub || "").trim();
+  const avatar = String(user?.avatar || "").trim();
+  if (id && avatar) return `https://cdn.discordapp.com/avatars/${id}/${avatar}.png`;
+  return null;
+}
+
+function createEmptyState() {
+  return {
+    profiles: [],
+    reviews: [],
+    reports: [],
+    blocked_accounts: [],
+    message_blocks: []
+  };
+}
+
+function isoNow() {
+  return new Date().toISOString();
+}
+
+function rows(allResult) {
+  if (Array.isArray(allResult?.results)) return allResult.results;
+  return [];
+}
+
+function sortByCreatedDesc(a, b) {
+  return String(b.created_at || "").localeCompare(String(a.created_at || ""));
 }
 
 async function runSql(db, sql) {
   if (typeof db.exec === "function") {
-    return await db.exec(sql);
+    await db.exec(sql);
+    return;
   }
-
-  if (typeof db.prepare === "function") {
-    const stmt = db.prepare(sql);
-    if (typeof stmt.run === "function") {
-      return await stmt.run();
-    }
-
-    if (typeof db.batch === "function") {
-      return await db.batch([stmt]);
-    }
+  const stmt = db.prepare(sql);
+  if (typeof stmt.run === "function") {
+    await stmt.run();
+    return;
   }
-
-  throw new Error("unsupported D1 API shape");
+  if (typeof db.batch === "function") {
+    await db.batch([stmt]);
+    return;
+  }
+  throw new Error("Unsupported D1 runtime");
 }
 
-async function tableExists(db, tableName) {
-  const stmt = db.prepare(
-    `SELECT name FROM sqlite_master WHERE type='table' AND name=?1 LIMIT 1`
-  ).bind(tableName);
-
-  if (typeof stmt.first === "function") {
-    const out = await stmt.first();
-    return Boolean(out?.name);
+async function tryLoadFileStore(env) {
+  if (!isNodeRuntime()) return null;
+  let fs;
+  try {
+    fs = await import("node:fs/promises");
+  } catch {
+    return null;
   }
 
-  if (typeof stmt.all === "function") {
-    const out = await stmt.all();
-    return Array.isArray(out?.results) && out.results.length > 0;
+  const file = String(env?.LOCAL_DB_FILE || "data/profiles-db.json");
+  if (DB_FILE_CACHE.has(file)) return DB_FILE_CACHE.get(file);
+
+  let state = createEmptyState();
+  try {
+    const raw = await fs.readFile(file, "utf8");
+    state = normalizeState(JSON.parse(raw));
+  } catch {
+    await ensureFile(fs, file, state);
   }
 
-  throw new Error("unsupported query API shape");
+  const persist = async () => {
+    await ensureFile(fs, file, state);
+  };
+
+  const store = { state, persist };
+  DB_FILE_CACHE.set(file, store);
+  return store;
 }
 
+function normalizeState(raw) {
+  const base = createEmptyState();
+  if (!raw || typeof raw !== "object") return base;
+  for (const key of Object.keys(base)) {
+    if (Array.isArray(raw[key])) base[key] = raw[key];
+  }
+  return base;
+}
+
+async function ensureFile(fs, file, state) {
+  const path = await import("node:path");
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  await fs.writeFile(file, JSON.stringify(state, null, 2), "utf8");
+}
+
+function isNodeRuntime() {
+  return typeof process !== "undefined" && Boolean(process.versions?.node);
+}

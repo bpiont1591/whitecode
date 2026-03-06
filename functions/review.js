@@ -1,13 +1,20 @@
 import { readSessionUser } from "./_lib/auth.js";
-import { ensureSchema, ensureSchemaViaHttp, hasD1HttpConfig, resolveD1DatabaseForUsage, saveReview, saveReviewViaHttp } from "./_lib/db.js";
-const RECENT_REVIEWS = globalThis.__WHITECODE_RECENT_REVIEWS__ || (globalThis.__WHITECODE_RECENT_REVIEWS__ = []);
+import {
+  createReviewId,
+  getProfile,
+  normalizeAccountFromSession,
+  normalizeAvatarFromSession,
+  normalizeDisplayFromSession,
+  saveProfile,
+  saveReview
+} from "./_lib/db.js";
+
+const DEFAULT_PROFILE = "whitecode";
 
 export async function onRequestPost({ request, env }) {
   try {
     const user = await readSessionUser(request, env);
-    if (!user) {
-      return json({ ok: false, error: "Musisz zalogować się przez Discord." }, 401);
-    }
+    if (!user) return json({ ok: false, error: "Musisz zalogować się przez Discord." }, 401);
 
     const originError = validateOrigin(request);
     if (originError) return json({ ok: false, error: originError }, 403);
@@ -19,293 +26,66 @@ export async function onRequestPost({ request, env }) {
 
     const data = await request.json();
     const review = String(data.review || "").trim();
-    const rating = Number(data.rating || 0);
+    const stars = Number(data.rating || 0);
+    const profileSlug = String(data.profileSlug || env.DEFAULT_PROFILE_SLUG || DEFAULT_PROFILE).trim().toLowerCase();
 
     if (!review) return json({ ok: false, error: "Wpisz treść opinii." }, 400);
     if (review.length > 1200) return json({ ok: false, error: "Opinia jest za długa (max 1200)." }, 400);
-    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
-      return json({ ok: false, error: "Wybierz ocenę od 1 do 5." }, 400);
-    }
+    if (!Number.isInteger(stars) || stars < 1 || stars > 5) return json({ ok: false, error: "Wybierz ocenę od 1 do 5." }, 400);
 
-    const reviewerRoleId = String(env.REVIEWER_ROLE_ID || "").trim();
-    if (reviewerRoleId) {
-      const guildId = env.DISCORD_GUILD_ID;
-      const botToken = env.DISCORD_BOT_TOKEN;
-
-      if (!guildId || !botToken) {
-        return json({ ok: false, error: "Dla ograniczenia po roli ustaw DISCORD_GUILD_ID i DISCORD_BOT_TOKEN." }, 500);
-      }
-
-      let member;
-      try {
-        member = await fetchGuildMember(guildId, user.sub, botToken);
-      } catch {
-        return json({ ok: false, error: "Nie udało się zweryfikować ról Discord. Sprawdź DISCORD_BOT_TOKEN, DISCORD_GUILD_ID i uprawnienia bota." }, 502);
-      }
-
-      if (!member) {
-        return json({ ok: false, error: "Musisz być członkiem naszego serwera Discord." }, 403);
-      }
-
-      const roles = Array.isArray(member.roles) ? member.roles : [];
-      if (!roles.includes(reviewerRoleId)) {
-        return json({ ok: false, error: "Tylko osoby z odpowiednią rangą mogą dodać opinię." }, 403);
-      }
-    }
-
-    const webhookUrl = env.REVIEW_WEBHOOK_URL || env.DISCORD_WEBHOOK_URL;
-    const dbInfo = await resolveD1DatabaseForUsage(env);
-    const db = dbInfo.db;
-
-    const discordDisplay = formatDiscordUser(user);
-    const createdAt = new Date().toISOString();
-    const stars = "⭐".repeat(rating);
-
-    const payload = {
-      username: "Opinie ze strony (WH!TEcode)",
-      allowed_mentions: { parse: [] },
-      embeds: [{
-        title: "⭐ Nowa opinia ze strony",
-        description: review,
-        color: 0xFFFFFF,
-        fields: [
-          { name: "Ocena", value: `${stars} (${rating}/5)`, inline: false },
-          { name: "👤 Autor", value: `${discordDisplay}\nID: ${safe(user.sub)}`, inline: false }
-        ],
-        footer: { text: "WH!TEcode • Opinie" },
-        timestamp: createdAt
-      }]
-    };
-
-    let webhookStatus = webhookUrl ? "sent" : "skipped";
-    let webhookError = null;
-
-    let webhookResponseOk = true;
-    if (webhookUrl) {
-      try {
-        const res = await fetch(webhookUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
-
-        webhookResponseOk = res.ok;
-        if (!res.ok) {
-          webhookStatus = "failed";
-          webhookError = `HTTP ${res.status}`;
-        }
-      } catch {
-        webhookResponseOk = false;
-        webhookStatus = "failed";
-        webhookError = "NETWORK_ERROR";
-      }
-    }
-
-    const reviewItem = {
-      created_at: createdAt,
-      discord_user_id: safe(user.sub),
-      discord_user_display: discordDisplay,
-      review: safe(review),
-      rating
-    };
-
-    let persistedToDb = false;
-    let dbWriteErrorCode = null;
-    if (db) {
-      try {
-        await ensureSchema(db);
-      } catch (error) {
-        console.error("[review] ensureSchema failed", {
-          bindingName: dbInfo.bindingName || null,
-          reason: dbInfo.reason,
-          errorMessage: error instanceof Error ? error.message : String(error)
-        });
-        // try direct write to reviews even if full schema init failed
-      }
-
-      try {
-        await saveReview(db, {
-          created_at: createdAt,
-          discord_user_id: safe(user.sub),
-          discord_user_display: discordDisplay,
-          review: safe(review),
-          rating,
-          webhook_status: webhookStatus,
-          webhook_error: webhookError
-        });
-        persistedToDb = true;
-      } catch (error) {
-        persistedToDb = false;
-        dbWriteErrorCode = "d1_write_failed";
-        console.error("[review] saveReview failed", {
-          bindingName: dbInfo.bindingName || null,
-          reason: dbInfo.reason,
-          errorMessage: error instanceof Error ? error.message : String(error)
-        });
-
-        const fallbackCandidates = Array.isArray(dbInfo.candidates) ? dbInfo.candidates : [];
-        for (const candidateName of fallbackCandidates) {
-          if (!candidateName || candidateName === dbInfo.bindingName) continue;
-
-          const candidateDb = env?.[candidateName];
-          if (!candidateDb || typeof candidateDb.prepare !== "function") continue;
-
-          try {
-            await ensureSchema(candidateDb);
-            await saveReview(candidateDb, {
-              created_at: createdAt,
-              discord_user_id: safe(user.sub),
-              discord_user_display: discordDisplay,
-              review: safe(review),
-              rating,
-              webhook_status: webhookStatus,
-              webhook_error: webhookError
-            });
-
-            persistedToDb = true;
-            dbWriteErrorCode = null;
-            console.warn("[review] persisted using fallback D1 candidate", {
-              primaryBinding: dbInfo.bindingName || null,
-              fallbackBinding: candidateName
-            });
-            break;
-          } catch (fallbackError) {
-            console.error("[review] fallback candidate save failed", {
-              fallbackBinding: candidateName,
-              errorMessage: fallbackError instanceof Error ? fallbackError.message : String(fallbackError)
-            });
-          }
-        }
-      }
-    } else {
-      dbWriteErrorCode = "d1_binding_unavailable";
-      console.error("[review] d1 unavailable", {
-        bindingName: dbInfo.bindingName || null,
-        reason: dbInfo.reason,
-        candidates: dbInfo.candidates || []
+    let profile = await getProfile(env, profileSlug);
+    if (!profile) {
+      await saveProfile(env, {
+        slug: profileSlug,
+        owner_account: "system",
+        owner_display: "System",
+        owner_avatar: null,
+        owner_bio: "Profil systemowy dla opinii landing page.",
+        created_at: new Date().toISOString(),
+        updated_at: null
       });
+      profile = await getProfile(env, profileSlug);
     }
 
-    if (!persistedToDb && hasD1HttpConfig(env)) {
-      try {
-        await ensureSchemaViaHttp(env);
-        const httpId = await saveReviewViaHttp(env, {
-          created_at: createdAt,
-          discord_user_id: safe(user.sub),
-          discord_user_display: discordDisplay,
-          review: safe(review),
-          rating,
-          webhook_status: webhookStatus,
-          webhook_error: webhookError
-        });
+    const reviewerAccount = normalizeAccountFromSession(user);
+    if (profile.owner_account === reviewerAccount) {
+      return json({ ok: false, error: "Właściciel profilu nie może wystawić opinii sam sobie." }, 403);
+    }
 
-        if (!httpId) {
-          dbWriteErrorCode = "d1_http_write_no_rowid";
-        } else {
-          persistedToDb = true;
-          dbWriteErrorCode = null;
-        }
-      } catch (httpError) {
-        dbWriteErrorCode = "d1_http_write_failed";
-        console.error("[review] d1 http fallback save failed", {
-          errorMessage: httpError instanceof Error ? httpError.message : String(httpError)
-        });
+    const ok = await saveReview(env, {
+      id: createReviewId(),
+      profile_slug: profileSlug,
+      rating: fromStarsToRating(stars),
+      reason: review,
+      reviewer_account: reviewerAccount,
+      reviewer_display: normalizeDisplayFromSession(user),
+      reviewer_avatar: normalizeAvatarFromSession(user),
+      created_at: new Date().toISOString()
+    });
+
+    if (!ok) {
+      return json({ ok: false, error: "Nie udało się zapisać opinii." }, 500);
+    }
+
+    return json({
+      ok: true,
+      item: {
+        created_at: new Date().toISOString(),
+        discord_user_id: String(user.sub || ""),
+        discord_user_display: normalizeDisplayFromSession(user),
+        review,
+        rating: stars
       }
-    }
-
-    if (!persistedToDb) {
-      const retryResult = await retryDurableSave({
-        env,
-        dbInfo,
-        row: {
-          created_at: createdAt,
-          discord_user_id: safe(user.sub),
-          discord_user_display: discordDisplay,
-          review: safe(review),
-          rating,
-          webhook_status: webhookStatus,
-          webhook_error: webhookError
-        }
-      });
-
-      if (retryResult.ok) {
-        persistedToDb = true;
-        dbWriteErrorCode = null;
-      } else if (retryResult.code) {
-        dbWriteErrorCode = retryResult.code;
-      }
-    }
-
-    RECENT_REVIEWS.unshift(reviewItem);
-    if (RECENT_REVIEWS.length > 24) RECENT_REVIEWS.length = 24;
-
-    if (!webhookResponseOk) {
-      return json({
-        ok: true,
-        item: reviewItem,
-        warning: persistedToDb ? "Nie udało się wysłać opinii na webhook Discord, ale zapisaliśmy ją w bazie danych." : "Nie udało się wysłać opinii na webhook Discord. Opinia pojawi się lokalnie, ale bez trwałego zapisu."
-      });
-    }
-
-    if (!persistedToDb) {
-      return json({
-        ok: false,
-        error: "Nie udało się zapisać opinii trwale w D1. Spróbuj ponownie za chwilę.",
-        code: dbWriteErrorCode || "d1_write_failed"
-      }, 503);
-    }
-
-    return json({ ok: true, item: reviewItem });
-  } catch {
+    });
+  } catch (error) {
     return json({ ok: false, error: "Błąd serwera podczas dodawania opinii." }, 500);
   }
 }
 
-async function retryDurableSave({ env, dbInfo, row }) {
-  try {
-    if (hasD1HttpConfig(env)) {
-      try {
-        await ensureSchemaViaHttp(env);
-        const id = await saveReviewViaHttp(env, row);
-        if (id) return { ok: true };
-      } catch {
-        // try binding path below
-      }
-    }
-
-    const refreshed = await resolveD1DatabaseForUsage(env);
-    if (refreshed?.db) {
-      try {
-        await ensureSchema(refreshed.db);
-      } catch {
-        // continue
-      }
-
-      await saveReview(refreshed.db, row);
-      return { ok: true };
-    }
-
-    if (!refreshed?.db && hasD1HttpConfig(env)) {
-      return { ok: false, code: "d1_http_write_no_rowid" };
-    }
-
-    if (!refreshed?.db) {
-      return { ok: false, code: "d1_binding_unavailable" };
-    }
-
-    return { ok: false, code: "d1_write_failed" };
-  } catch {
-    return { ok: false, code: "d1_write_retry_failed" };
-  }
-}
-
-async function fetchGuildMember(guildId, userId, botToken) {
-  const res = await fetch(`https://discord.com/api/v10/guilds/${guildId}/members/${userId}`, {
-    headers: { Authorization: `Bot ${botToken}` }
-  });
-  if (res.status === 404) return null;
-  if (!res.ok) throw new Error("guild member fetch failed");
-  return await res.json();
+function fromStarsToRating(stars) {
+  if (stars <= 2) return "scam";
+  if (stars === 3) return "sold";
+  return "legit";
 }
 
 function validateOrigin(request) {
@@ -339,17 +119,4 @@ function json(obj, status = 200) {
     status,
     headers: { "Content-Type": "application/json; charset=utf-8" }
   });
-}
-
-function safe(s) {
-  const str = String(s || "").trim();
-  return str.length ? str : "—";
-}
-
-function formatDiscordUser(user) {
-  const username = safe(user.username);
-  const discr = String(user.discriminator || "0");
-  const globalName = String(user.global_name || "").trim();
-  const tag = discr && discr !== "0" ? `${username}#${discr}` : username;
-  return globalName ? `${globalName} (${tag})` : tag;
 }

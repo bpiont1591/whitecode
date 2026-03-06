@@ -1,65 +1,70 @@
 # whitecode
 
-## Wymagane sekrety (Cloudflare Pages Functions)
-Aby formularz działał tylko po logowaniu Discord OAuth i wysyłał dane użytkownika, ustaw:
+Nowy system opini działa w 3 trybach i nie wymaga ręcznego stawiania tabel przy poprawnym `DB` bindingu.
 
-- `DISCORD_WEBHOOK_URL` – webhook kanału docelowego
-- `DISCORD_CLIENT_ID` – OAuth2 Client ID aplikacji Discord
-- `DISCORD_CLIENT_SECRET` – OAuth2 Client Secret aplikacji Discord
-- `DISCORD_REDIRECT_URI` – np. `https://whitecode.pl/auth/discord/callback`
-- `SESSION_SECRET` – długi losowy sekret do podpisywania sesji cookie
-- `D1_BINDING_NAME` – *(opcjonalnie)* nazwa bindingu D1, jeśli nie używasz standardowej nazwy `DB`
-- `D1_BINDING_CANDIDATES` – *(opcjonalnie)* lista nazw bindingów D1 rozdzielona przecinkami (np. `MY_DB,PROD_DB`)
-- `D1_DATABASE_ID` – *(opcjonalnie)* ID bazy D1 do fallbacku przez Cloudflare API (gdy binding nie działa)
-- `CF_ACCOUNT_ID` lub `CLOUDFLARE_ACCOUNT_ID` – konto Cloudflare dla fallbacku API
-- `CF_API_TOKEN` lub `CLOUDFLARE_API_TOKEN` – token API z uprawnieniami D1 (Edit)
+## Tryby danych
 
-## Endpointy auth
-- `GET /auth/discord/start`
-- `GET /auth/discord/callback`
-- `GET /auth/me`
-- `POST /auth/logout`
+1. **Produkcja (Cloudflare D1)**
+   - jeśli dostępne jest `env.DB`, backend automatycznie robi `ensureSchema` (tabele + indeksy),
+   - zapis i odczyt idzie SQL-em.
+
+2. **Fallback/dev (in-memory)**
+   - jeśli `env.DB` nie istnieje i runtime nie ma dostępu do pliku, działa pamięć procesu (`MEM_DB`).
+
+3. **Lokalny Node (trwały plik JSON)**
+   - jeśli brak `env.DB`, ale uruchamiasz w Node, dane zapisują się do `data/profiles-db.json` (lub ścieżki z `LOCAL_DB_FILE`).
+
+## Wymagane sekrety auth/webhook
+
+- `DISCORD_WEBHOOK_URL`
+- `DISCORD_CLIENT_ID`
+- `DISCORD_CLIENT_SECRET`
+- `DISCORD_REDIRECT_URI`
+- `SESSION_SECRET`
+
+## D1 binding
+
+- ustaw D1 binding jako `DB`.
+- opcjonalnie `DEFAULT_PROFILE_SLUG` dla endpointów `/review` i `/reviews`.
+
+## Tabele tworzone automatycznie
+
+- `profiles`
+- `reviews`
+- `reports`
+- `blocked_accounts`
+- `message_blocks`
+
+Schemat referencyjny: `schema.sql`.
+
+## API (system profili i opinii)
+
+- `GET /api/profile?user=<slug>`
+- `POST /api/profile/create`
+- `POST /api/profile/settings`
+- `POST /api/profile/delete`
+- `GET /api/my-profile`
+- `POST /api/review`
+- `POST /api/report`
+- `POST /api/report/resolve`
+- `GET /api/admin/reports`
+- `GET /api/admin/stats`
+- `POST /api/admin/block`
+- `POST /api/admin/report/action`
+
+## Kompatybilność z dotychczasowym landingiem
+
+- `POST /review` (1-5 gwiazdek)
 - `GET /reviews`
-- `GET /db/init`
 
-## Ustawienia Discord OAuth
-W panelu Discord Developer Portal:
-1. Dodaj Redirect URI identyczny z `DISCORD_REDIRECT_URI`.
-2. Scope: `identify`.
+Te endpointy mapują dane do nowego modelu tabeli `reviews`.
 
-## SEO i bezpieczeństwo (wdrożone)
-- `robots.txt` i `sitemap.xml` dla lepszego indeksowania Google.
-- Meta tagi SEO + OpenGraph + Twitter Cards + JSON-LD w `index.html`.
-- Globalne nagłówki bezpieczeństwa w pliku `_headers` (CSP, HSTS, XFO, nosniff itd.).
-- Dodatkowa walidacja backendu formularza:
-  - sprawdzanie `Origin` / `Referer`,
-  - wymóg `Content-Type: application/json`,
-  - whitelista tematów formularza.
+## Smoke test (lokalnie)
 
+Uruchom:
 
-## Ograniczenie dodawania opinii po roli Discord
-Dodany endpoint `POST /review` wymaga zalogowanego użytkownika Discord.
+```bash
+node tests/smoke-reviews.mjs
+```
 
-Ograniczenie po roli Discord jest opcjonalne:
-- ustaw `REVIEWER_ROLE_ID`, aby wymusić konkretną rolę,
-- wtedy wymagane są też `DISCORD_GUILD_ID` i `DISCORD_BOT_TOKEN` do weryfikacji przez Discord API.
-
-Opcjonalnie możesz ustawić osobny webhook dla opinii:
-- `REVIEW_WEBHOOK_URL` (fallback: `DISCORD_WEBHOOK_URL`).
-
-
-## Trwałość opinii (zalecane D1)
-Opinie są zapisywane trwale do D1 (preferowana tabela `reviews_v2`, kompatybilnie także `reviews`).
-
-Fallback: jeśli D1 jest chwilowo niedostępne, API może tymczasowo pokazać ostatnie opinie z pamięci runtime.
-
-`GET /db/init` wykonuje:
-- inicjalizację/migracje schematu,
-- utworzenie i weryfikację tabel (`reviews`, `reviews_v2`),
-- healthcheck write-read-delete na ścieżce zapisu opinii.
-
-
-## Oceny opinii i widoczność na stronie
-- Formularz opinii wymaga wyboru oceny 1-5 gwiazdek.
-- Endpoint `POST /review` zapisuje opinię do D1 (z fallbackiem pamięci runtime przy awarii D1).
-- Endpoint `GET /reviews` zwraca najnowsze opinie, które są renderowane na stronie w sekcji Opinie.
+Test sprawdza sekwencję: create profile → add review → report → resolve → delete profile → recreate.
