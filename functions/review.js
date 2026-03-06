@@ -96,9 +96,16 @@ export async function onRequestPost({ request, env }) {
       });
     }
 
-    if (!res.ok) return json({ ok: false, error: "Discord webhook odrzucił opinię, ale zapisaliśmy ją w bazie." }, 502);
+    const reviewItem = {
+      created_at: createdAt,
+      discord_user_display: discordDisplay,
+      review: safe(review),
+      rating
+    };
 
-    return json({ ok: true });
+    if (!res.ok) return json({ ok: false, error: "Discord webhook odrzucił opinię, ale zapisaliśmy ją w bazie.", item: reviewItem }, 502);
+
+    return json({ ok: true, item: reviewItem });
   } catch {
     return json({ ok: false, error: "Błąd serwera." }, 500);
   }

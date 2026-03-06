@@ -378,33 +378,37 @@
         .replace(/'/g, "&#039;");
     }
 
+    function renderReviewCard(it) {
+      const stars = starsFromRating(it.rating);
+      return `
+        <article class="review-card">
+          <div class="review-header">
+            <div class="avatar"><i class="fa-brands fa-discord"></i></div>
+            <div>
+              <div class="review-name">${escapeHtml(it.discord_user_display || "Użytkownik Discord")}</div>
+              <div class="review-meta">Opinia ze strony</div>
+            </div>
+          </div>
+          <div class="stars">${stars} <span class="rating-meta">(${Number(it.rating || 0)}/5)</span></div>
+          <p class="review-text">„${escapeHtml(it.review || "")}”</p>
+        </article>
+      `;
+    }
+
+    function renderLiveReviews(items) {
+      if (!items.length) {
+        liveReviewsEl.innerHTML = '<div class="status status-box">Brak opinii dodanych przez formularz.</div>';
+        return;
+      }
+      liveReviewsEl.innerHTML = items.map(renderReviewCard).join("");
+    }
+
     async function loadLiveReviews() {
       try {
         const res = await fetch(API_REVIEWS, { cache: "no-store" });
         const out = await res.json().catch(() => ({ items: [] }));
         const items = Array.isArray(out.items) ? out.items : [];
-
-        if (!items.length) {
-          liveReviewsEl.innerHTML = '<div class="status status-box">Brak opinii dodanych przez formularz.</div>';
-          return;
-        }
-
-        liveReviewsEl.innerHTML = items.map((it) => {
-          const stars = starsFromRating(it.rating);
-          return `
-            <article class="review-card">
-              <div class="review-header">
-                <div class="avatar"><i class="fa-brands fa-discord"></i></div>
-                <div>
-                  <div class="review-name">${escapeHtml(it.discord_user_display || "Użytkownik Discord")}</div>
-                  <div class="review-meta">Opinia ze strony</div>
-                </div>
-              </div>
-              <div class="stars">${stars} <span class="rating-meta">(${Number(it.rating || 0)}/5)</span></div>
-              <p class="review-text">„${escapeHtml(it.review || "")}"</p>
-            </article>
-          `;
-        }).join("");
+        renderLiveReviews(items);
       } catch {
         liveReviewsEl.innerHTML = '<div class="status status-box err">Nie udało się załadować opinii.</div>';
       }
@@ -503,7 +507,17 @@
         reviewForm.reset();
         reviewRatingEl.value = "5";
         setReviewStatus("Opinia wysłana ✅", "ok");
-        await loadLiveReviews();
+
+        if (out.item) {
+          const current = Array.from(liveReviewsEl.querySelectorAll('.review-card')).map(() => null);
+          if (current.length === 0 || liveReviewsEl.textContent.includes("Brak opinii")) {
+            renderLiveReviews([out.item]);
+          } else {
+            liveReviewsEl.insertAdjacentHTML('afterbegin', renderReviewCard(out.item));
+          }
+        } else {
+          await loadLiveReviews();
+        }
       } catch {
         setReviewStatus("Błąd sieci. Spróbuj ponownie.", "err");
       }
