@@ -23,6 +23,7 @@
         <a href="#oferta">Oferta</a>
         <a href="#opinie">Opinie</a>
         <a href="#kontakt">Kontakt</a>
+        <button id="navLogoutBtn" class="nav-logout" type="button" hidden><i class="fa-solid fa-right-from-bracket"></i> Wyloguj</button>
       </div>
     </div>
   </nav>
@@ -188,27 +189,29 @@
               <a id="discordLoginBtn" class="btn btn-ghost" href="/auth/discord/start?returnTo=/#kontakt">
                 <i class="fa-brands fa-discord"></i> Zaloguj przez Discord
               </a>
-              <button id="discordLogoutBtn" class="btn btn-ghost" type="button" hidden>
-                <i class="fa-solid fa-right-from-bracket"></i> Wyloguj
-              </button>
             </div>
           </div>
 
           <form id="contactForm" class="contact-form">
             <div class="form-row">
               <div class="field">
-                <label for="name">Nick / Imię</label>
-                <input id="name" name="name" type="text" required />
+                <label for="name">Nick Discord (auto)</label>
+                <input id="name" name="name" type="text" readonly required />
               </div>
               <div class="field">
-                <label for="contact">Kontakt (Discord lub e-mail)</label>
-                <input id="contact" name="contact" type="text" required />
+                <label for="contact">ID Discord (auto)</label>
+                <input id="contact" name="contact" type="text" readonly required />
               </div>
             </div>
 
             <div class="field">
               <label for="topic">Temat</label>
-              <input id="topic" name="topic" type="text" required />
+              <select id="topic" name="topic" required>
+                <option value="" selected disabled>Wybierz temat…</option>
+                <option value="Bot Discord">Bot Discord</option>
+                <option value="Strona Internetowa">Strona Internetowa</option>
+                <option value="Inne">Inne</option>
+              </select>
             </div>
 
             <div class="field">
@@ -273,7 +276,7 @@
 
     const authInfoEl = document.getElementById("authInfo");
     const loginBtn = document.getElementById("discordLoginBtn");
-    const logoutBtn = document.getElementById("discordLogoutBtn");
+    const navLogoutBtn = document.getElementById("navLogoutBtn");
 
     let loggedUser = null;
 
@@ -296,11 +299,17 @@
         const visibleName = loggedUser.global_name || loggedUser.username || "Użytkownik";
         authInfoEl.textContent = `Zalogowano jako: ${visibleName} (ID: ${loggedUser.id})`;
         loginBtn.hidden = true;
-        logoutBtn.hidden = false;
+        navLogoutBtn.hidden = false;
+
+        document.getElementById("name").value = visibleName;
+        document.getElementById("contact").value = loggedUser.id;
       } else {
         authInfoEl.textContent = "Wymagane logowanie przez Discord przed wysłaniem wiadomości.";
         loginBtn.hidden = false;
-        logoutBtn.hidden = true;
+        navLogoutBtn.hidden = true;
+
+        document.getElementById("name").value = "";
+        document.getElementById("contact").value = "";
       }
     }
 
@@ -314,7 +323,7 @@
       }
     }
 
-    logoutBtn.addEventListener("click", async () => {
+    navLogoutBtn.addEventListener("click", async () => {
       try {
         await fetch(API_LOGOUT, { method: "POST", credentials: "include" });
       } finally {
@@ -336,6 +345,7 @@
 
       if ((hpEl?.value || "").trim().length > 0) {
         form.reset();
+        setAuthUI(loggedUser);
         updateCount();
         setStatus("Wysłane ✅", "ok");
         return;
@@ -375,6 +385,7 @@
         }
 
         form.reset();
+        setAuthUI(loggedUser);
         updateCount();
         setStatus("Wysłane ✅", "ok");
       } catch {

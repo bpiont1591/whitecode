@@ -9,13 +9,18 @@ export async function onRequestPost({ request, env }) {
 
     const data = await request.json();
 
-    const name = String(data.name || "").trim();
-    const contact = String(data.contact || "").trim();
+    const name = String(user.global_name || user.username || "").trim();
+    const contact = String(user.sub || "").trim();
     const topic = String(data.topic || "").trim();
     const message = String(data.message || "").trim();
 
     if (!name || !contact || !topic || !message) {
       return json({ ok: false, error: "Uzupełnij wszystkie pola." }, 400);
+    }
+
+    const allowedTopics = new Set(["Bot Discord", "Strona Internetowa", "Inne"]);
+    if (!allowedTopics.has(topic)) {
+      return json({ ok: false, error: "Wybierz poprawny temat z listy." }, 400);
     }
 
     if (name.length > 80 || contact.length > 120 || topic.length > 140 || message.length > 4000) {
