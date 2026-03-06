@@ -18,7 +18,7 @@ export async function onRequestGet({ env }) {
     const items = Array.isArray(result?.results) ? result.results : [];
     return json({ ok: true, items });
   } catch {
-    return json({ ok: false, items: [], error: "Nie udało się pobrać opinii z bazy D1." }, 500);
+    return json({ ok: false, items: [], error: "Nie udało się pobrać opinii z bazy D1 (sprawdź binding i utworzenie tabel)." }, 500);
   }
 }
 

@@ -1,42 +1,56 @@
-let schemaReady = false;
+const initializedSchemas = new WeakSet();
+
+const CREATE_CONTACT_MESSAGES_SQL = `
+  CREATE TABLE IF NOT EXISTS contact_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at TEXT NOT NULL,
+    discord_user_id TEXT NOT NULL,
+    discord_user_display TEXT NOT NULL,
+    form_name TEXT NOT NULL,
+    form_contact TEXT NOT NULL,
+    topic TEXT NOT NULL,
+    message TEXT NOT NULL,
+    webhook_status TEXT NOT NULL DEFAULT 'pending',
+    webhook_error TEXT
+  )
+`;
+
+const CREATE_REVIEWS_SQL = `
+  CREATE TABLE IF NOT EXISTS reviews (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at TEXT NOT NULL,
+    discord_user_id TEXT NOT NULL,
+    discord_user_display TEXT NOT NULL,
+    review TEXT NOT NULL,
+    rating INTEGER NOT NULL DEFAULT 5,
+    webhook_status TEXT NOT NULL DEFAULT 'pending',
+    webhook_error TEXT
+  )
+`;
+
+const ADD_REVIEWS_RATING_SQL = `ALTER TABLE reviews ADD COLUMN rating INTEGER NOT NULL DEFAULT 5`;
 
 export async function ensureSchema(db) {
-  if (!db || schemaReady) return;
+  if (!db) return;
+  if (initializedSchemas.has(db)) return;
 
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS contact_messages (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      created_at TEXT NOT NULL,
-      discord_user_id TEXT NOT NULL,
-      discord_user_display TEXT NOT NULL,
-      form_name TEXT NOT NULL,
-      form_contact TEXT NOT NULL,
-      topic TEXT NOT NULL,
-      message TEXT NOT NULL,
-      webhook_status TEXT NOT NULL DEFAULT 'pending',
-      webhook_error TEXT
-    );
-
-    CREATE TABLE IF NOT EXISTS reviews (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      created_at TEXT NOT NULL,
-      discord_user_id TEXT NOT NULL,
-      discord_user_display TEXT NOT NULL,
-      review TEXT NOT NULL,
-      rating INTEGER NOT NULL DEFAULT 5,
-      webhook_status TEXT NOT NULL DEFAULT 'pending',
-      webhook_error TEXT
-    );
-  `);
+  await runSql(db, CREATE_CONTACT_MESSAGES_SQL);
+  await runSql(db, CREATE_REVIEWS_SQL);
 
   // migration for existing tables without rating column
   try {
-    await db.exec(`ALTER TABLE reviews ADD COLUMN rating INTEGER NOT NULL DEFAULT 5;`);
+    await runSql(db, ADD_REVIEWS_RATING_SQL);
   } catch {
     // column probably already exists
   }
 
-  schemaReady = true;
+  const contactOk = await tableExists(db, "contact_messages");
+  const reviewsOk = await tableExists(db, "reviews");
+  if (!contactOk || !reviewsOk) {
+    throw new Error("schema verification failed");
+  }
+
+  initializedSchemas.add(db);
 }
 
 export async function saveContactMessage(db, row) {
@@ -123,4 +137,24 @@ function isD1Binding(obj) {
     typeof obj.prepare === "function" &&
     (typeof obj.exec === "function" || typeof obj.batch === "function")
   );
+}
+
+async function runSql(db, sql) {
+  if (typeof db.exec === "function") {
+    return await db.exec(sql);
+  }
+
+  if (typeof db.batch === "function" && typeof db.prepare === "function") {
+    return await db.batch([db.prepare(sql)]);
+  }
+
+  throw new Error("unsupported D1 API shape");
+}
+
+async function tableExists(db, tableName) {
+  const out = await db.prepare(
+    `SELECT name FROM sqlite_master WHERE type='table' AND name=?1 LIMIT 1`
+  ).bind(tableName).first();
+
+  return Boolean(out?.name);
 }

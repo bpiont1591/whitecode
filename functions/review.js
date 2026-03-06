@@ -114,7 +114,7 @@ export async function onRequestPost({ request, env }) {
         webhook_error: webhookError
       });
     } catch {
-      return json({ ok: false, error: "Nie udało się zapisać opinii do bazy D1. Sprawdź binding i uprawnienia bazy." }, 500);
+      return json({ ok: false, error: "Nie udało się zapisać opinii do bazy D1. Sprawdź binding, uprawnienia oraz czy tabele mogły zostać utworzone automatycznie." }, 500);
     }
 
     const reviewItem = {
