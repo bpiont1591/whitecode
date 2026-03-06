@@ -186,6 +186,7 @@ function setAuthUI(user) {
     });
 
     updateCount();
+    warmupDatabaseSchema();
     refreshAuth();
     loadLiveReviews();
     messageEl.addEventListener("input", updateCount);
@@ -309,7 +310,11 @@ function setAuthUI(user) {
         form.reset();
         setAuthUI(loggedUser);
         updateCount();
-        setStatus("Wysłane ✅", "ok");
+        if (out.warning) {
+          setStatus(`Wysłane ✅ (${out.warning})`, "ok");
+        } else {
+          setStatus("Wysłane ✅", "ok");
+        }
       } catch {
         setStatus("Błąd sieci. Spróbuj ponownie.", "err");
       }

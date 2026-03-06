@@ -79,23 +79,36 @@ export async function onRequestPost({ request, env }) {
       webhookError = `HTTP ${res.status}`;
     }
 
+    let dbSaved = false;
     if (db) {
-      await ensureSchema(db);
-      await saveContactMessage(db, {
-        created_at: createdAt,
-        discord_user_id: safe(user.sub),
-        discord_user_display: discordDisplay,
-        form_name: safe(name),
-        form_contact: safe(contact),
-        topic: safe(topic),
-        message: safe(message),
-        webhook_status: webhookStatus,
-        webhook_error: webhookError
-      });
+      try {
+        await ensureSchema(db);
+        await saveContactMessage(db, {
+          created_at: createdAt,
+          discord_user_id: safe(user.sub),
+          discord_user_display: discordDisplay,
+          form_name: safe(name),
+          form_contact: safe(contact),
+          topic: safe(topic),
+          message: safe(message),
+          webhook_status: webhookStatus,
+          webhook_error: webhookError
+        });
+        dbSaved = true;
+      } catch {
+        dbSaved = false;
+      }
     }
 
     if (!res.ok) {
-      return json({ ok: false, error: "Discord webhook odrzucił żądanie, ale wiadomość została zapisana w bazie." }, 502);
+      if (dbSaved) {
+        return json({ ok: false, error: "Discord webhook odrzucił żądanie, ale wiadomość została zapisana w bazie." }, 502);
+      }
+      return json({ ok: false, error: "Discord webhook odrzucił żądanie i nie udało się zapisać wiadomości do bazy." }, 502);
+    }
+
+    if (!dbSaved && db) {
+      return json({ ok: true, warning: "Wiadomość wysłana na Discord, ale nie udało się zapisać do bazy D1." });
     }
 
     return json({ ok: true });
