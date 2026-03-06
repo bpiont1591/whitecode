@@ -23,10 +23,18 @@ export async function ensureSchema(db) {
       discord_user_id TEXT NOT NULL,
       discord_user_display TEXT NOT NULL,
       review TEXT NOT NULL,
+      rating INTEGER NOT NULL DEFAULT 5,
       webhook_status TEXT NOT NULL DEFAULT 'pending',
       webhook_error TEXT
     );
   `);
+
+  // migration for existing tables without rating column
+  try {
+    await db.exec(`ALTER TABLE reviews ADD COLUMN rating INTEGER NOT NULL DEFAULT 5;`);
+  } catch {
+    // column probably already exists
+  }
 
   schemaReady = true;
 }
@@ -62,13 +70,14 @@ export async function saveReview(db, row) {
   const stmt = db.prepare(`
     INSERT INTO reviews (
       created_at, discord_user_id, discord_user_display,
-      review, webhook_status, webhook_error
-    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+      review, rating, webhook_status, webhook_error
+    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
   `).bind(
     row.created_at,
     row.discord_user_id,
     row.discord_user_display,
     row.review,
+    row.rating,
     row.webhook_status,
     row.webhook_error ?? null
   );

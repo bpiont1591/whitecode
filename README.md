@@ -14,6 +14,7 @@ Aby formularz działał tylko po logowaniu Discord OAuth i wysyłał dane użytk
 - `GET /auth/discord/callback`
 - `GET /auth/me`
 - `POST /auth/logout`
+- `GET /reviews`
 
 ## Ustawienia Discord OAuth
 W panelu Discord Developer Portal:
@@ -52,3 +53,9 @@ Dane zapisują się nawet jeśli Discord webhook chwilowo zwróci błąd (status
 1. Utwórz bazę D1.
 2. Podepnij binding o nazwie `DB` do Pages Functions.
 3. (Opcjonalnie) uruchom `schema.sql` ręcznie; kod i tak tworzy tabele automatycznie przy pierwszym zapisie.
+
+
+## Oceny opinii i widoczność na stronie
+- Formularz opinii wymaga wyboru oceny 1-5 gwiazdek.
+- Endpoint `POST /review` zapisuje ocenę i treść do D1.
+- Endpoint `GET /reviews` zwraca najnowsze opinie, które są renderowane na stronie w sekcji Opinie.

@@ -20,9 +20,13 @@ export async function onRequestPost({ request, env }) {
 
     const data = await request.json();
     const review = String(data.review || "").trim();
+    const rating = Number(data.rating || 0);
 
     if (!review) return json({ ok: false, error: "Wpisz treść opinii." }, 400);
     if (review.length > 1200) return json({ ok: false, error: "Opinia jest za długa (max 1200)." }, 400);
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+      return json({ ok: false, error: "Wybierz ocenę od 1 do 5." }, 400);
+    }
 
     const guildId = env.DISCORD_GUILD_ID;
     const botToken = env.DISCORD_BOT_TOKEN;
@@ -47,6 +51,8 @@ export async function onRequestPost({ request, env }) {
 
     const discordDisplay = formatDiscordUser(user);
     const createdAt = new Date().toISOString();
+    const stars = "⭐".repeat(rating);
+
     const payload = {
       username: "Opinie ze strony (WH!TEcode)",
       allowed_mentions: { parse: [] },
@@ -55,6 +61,7 @@ export async function onRequestPost({ request, env }) {
         description: review,
         color: 0xFFFFFF,
         fields: [
+          { name: "Ocena", value: `${stars} (${rating}/5)`, inline: false },
           { name: "👤 Autor", value: `${discordDisplay}\nID: ${safe(user.sub)}`, inline: false }
         ],
         footer: { text: "WH!TEcode • Opinie" },
@@ -83,6 +90,7 @@ export async function onRequestPost({ request, env }) {
         discord_user_id: safe(user.sub),
         discord_user_display: discordDisplay,
         review: safe(review),
+        rating,
         webhook_status: webhookStatus,
         webhook_error: webhookError
       });

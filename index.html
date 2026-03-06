@@ -183,13 +183,27 @@
           <p class="review-text">„Bardzo sprawna współpraca i finalny efekt dokładnie zgodny z ustaleniami.”</p>
         </article>
       </div>
-    
+
+      <div class="panel live-reviews-panel">
+        <h3>Najnowsze opinie ze strony</h3>
+        <p class="panel-sub">Opinie dodane przez zalogowanych użytkowników Discord (z odpowiednią rangą).</p>
+        <div id="liveReviews" class="grid reviews"></div>
+      </div>
 
       <div class="panel review-submit-panel">
         <h3>Dodaj opinię (tylko wybrana ranga Discord)</h3>
         <p class="panel-sub">Po zalogowaniu możesz wysłać opinię, ale tylko jeśli masz rolę <strong class="client-role">✨Klient</strong> na naszym serwerze.</p>
 
         <form id="reviewForm" class="review-form">
+          <label for="reviewRating">Ocena</label>
+          <select id="reviewRating" name="reviewRating" required>
+            <option value="5">5/5 ⭐⭐⭐⭐⭐</option>
+            <option value="4">4/5 ⭐⭐⭐⭐</option>
+            <option value="3">3/5 ⭐⭐⭐</option>
+            <option value="2">2/5 ⭐⭐</option>
+            <option value="1">1/5 ⭐</option>
+          </select>
+
           <label for="reviewMessage">Twoja opinia</label>
           <textarea id="reviewMessage" name="reviewMessage" placeholder="Napisz krótką opinię o współpracy..." required></textarea>
           <button id="reviewSubmitBtn" class="btn btn-ghost" type="submit" disabled>
@@ -312,6 +326,7 @@
     const API_ME = "/auth/me";
     const API_LOGOUT = "/auth/logout";
     const API_REVIEW = "/review";
+    const API_REVIEWS = "/reviews";
 
     const form = document.getElementById("contactForm");
     const statusEl = document.getElementById("status");
@@ -321,9 +336,11 @@
     const submitBtn = form.querySelector('button[type="submit"]');
 
     const reviewForm = document.getElementById("reviewForm");
+    const reviewRatingEl = document.getElementById("reviewRating");
     const reviewMessageEl = document.getElementById("reviewMessage");
     const reviewStatusEl = document.getElementById("reviewStatus");
     const reviewSubmitBtn = document.getElementById("reviewSubmitBtn");
+    const liveReviewsEl = document.getElementById("liveReviews");
 
     const authBoxEl = document.getElementById("authBox");
     const authInfoEl = document.getElementById("authInfo");
@@ -345,6 +362,52 @@
     function setReviewStatus(msg, type) {
       reviewStatusEl.textContent = msg;
       reviewStatusEl.className = "status status-box " + (type || "");
+    }
+
+    function starsFromRating(rating) {
+      const n = Math.max(1, Math.min(5, Number(rating || 0)));
+      return "⭐".repeat(n);
+    }
+
+    function escapeHtml(str) {
+      return String(str || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    async function loadLiveReviews() {
+      try {
+        const res = await fetch(API_REVIEWS, { cache: "no-store" });
+        const out = await res.json().catch(() => ({ items: [] }));
+        const items = Array.isArray(out.items) ? out.items : [];
+
+        if (!items.length) {
+          liveReviewsEl.innerHTML = '<div class="status status-box">Brak opinii dodanych przez formularz.</div>';
+          return;
+        }
+
+        liveReviewsEl.innerHTML = items.map((it) => {
+          const stars = starsFromRating(it.rating);
+          return `
+            <article class="review-card">
+              <div class="review-header">
+                <div class="avatar"><i class="fa-brands fa-discord"></i></div>
+                <div>
+                  <div class="review-name">${escapeHtml(it.discord_user_display || "Użytkownik Discord")}</div>
+                  <div class="review-meta">Opinia ze strony</div>
+                </div>
+              </div>
+              <div class="stars">${stars} <span class="rating-meta">(${Number(it.rating || 0)}/5)</span></div>
+              <p class="review-text">„${escapeHtml(it.review || "")}"</p>
+            </article>
+          `;
+        }).join("");
+      } catch {
+        liveReviewsEl.innerHTML = '<div class="status status-box err">Nie udało się załadować opinii.</div>';
+      }
     }
 
     function setAuthUI(user) {
@@ -393,6 +456,7 @@
 
     updateCount();
     refreshAuth();
+    loadLiveReviews();
     messageEl.addEventListener("input", updateCount);
 
 
@@ -404,7 +468,13 @@
         return;
       }
 
+      const rating = Number(reviewRatingEl.value || 0);
       const review = (reviewMessageEl.value || "").trim();
+      if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+        setReviewStatus("Wybierz ocenę od 1 do 5.", "err");
+        return;
+      }
+
       if (!review) {
         setReviewStatus("Wpisz treść opinii.", "err");
         return;
@@ -421,7 +491,7 @@
           method: "POST",
           credentials: "include",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ review })
+          body: JSON.stringify({ review, rating })
         });
 
         const out = await res.json().catch(() => ({}));
@@ -431,7 +501,9 @@
         }
 
         reviewForm.reset();
+        reviewRatingEl.value = "5";
         setReviewStatus("Opinia wysłana ✅", "ok");
+        await loadLiveReviews();
       } catch {
         setReviewStatus("Błąd sieci. Spróbuj ponownie.", "err");
       }

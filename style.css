@@ -347,6 +347,17 @@ h1 span { color: var(--accent-strong); text-shadow: 0 0 22px rgba(228, 235, 255,
   margin-right: auto;
 }
 
+
+.live-reviews-panel {
+  margin-top: 16px;
+}
+
+.rating-meta {
+  color: var(--muted);
+  font-size: 0.82rem;
+  margin-left: 6px;
+}
+
 .review-form {
   display: grid;
   gap: 10px;

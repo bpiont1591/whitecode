@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS reviews (
   discord_user_id TEXT NOT NULL,
   discord_user_display TEXT NOT NULL,
   review TEXT NOT NULL,
+  rating INTEGER NOT NULL DEFAULT 5,
   webhook_status TEXT NOT NULL DEFAULT 'pending',
   webhook_error TEXT
 );
