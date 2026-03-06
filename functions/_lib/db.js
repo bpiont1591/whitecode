@@ -89,7 +89,21 @@ export async function saveReview(db, row) {
 export function resolveD1Database(env) {
   if (!env || typeof env !== "object") return null;
 
-  const preferred = ["DB", "WHITECODE_PROD", "D1", "DATABASE"];
+  const configuredBindingName = String(env.D1_BINDING_NAME || "").trim();
+  if (configuredBindingName) {
+    const configured = env[configuredBindingName];
+    if (isD1Binding(configured)) return configured;
+  }
+
+  const preferred = [
+    "DB",
+    "WHITECODE_PROD",
+    "whitecode_prod",
+    "whitecode-prod",
+    "D1",
+    "DATABASE"
+  ];
+
   for (const key of preferred) {
     const cand = env[key];
     if (isD1Binding(cand)) return cand;
@@ -107,6 +121,6 @@ function isD1Binding(obj) {
     obj &&
     typeof obj === "object" &&
     typeof obj.prepare === "function" &&
-    typeof obj.exec === "function"
+    (typeof obj.exec === "function" || typeof obj.batch === "function")
   );
 }

@@ -55,7 +55,7 @@ export async function onRequestPost({ request, env }) {
     const webhookUrl = env.REVIEW_WEBHOOK_URL || env.DISCORD_WEBHOOK_URL;
     const db = resolveD1Database(env);
     if (!db) {
-      return json({ ok: false, error: "Brak bindowania D1 w Functions. Ustaw binding (np. DB) do bazy whitecode-prod." }, 500);
+      return json({ ok: false, error: "Brak bindowania D1 w Functions. Ustaw D1 binding (np. DB) lub env D1_BINDING_NAME=twoja_nazwa_bindingu." }, 500);
     }
 
     const discordDisplay = formatDiscordUser(user);

@@ -8,6 +8,7 @@ Aby formularz działał tylko po logowaniu Discord OAuth i wysyłał dane użytk
 - `DISCORD_CLIENT_SECRET` – OAuth2 Client Secret aplikacji Discord
 - `DISCORD_REDIRECT_URI` – np. `https://whitecode.pl/auth/discord/callback`
 - `SESSION_SECRET` – długi losowy sekret do podpisywania sesji cookie
+- `D1_BINDING_NAME` – *(opcjonalnie)* nazwa bindingu D1, jeśli nie używasz standardowej nazwy `DB`
 
 ## Endpointy auth
 - `GET /auth/discord/start`
@@ -52,8 +53,9 @@ Dane zapisują się nawet jeśli Discord webhook chwilowo zwróci błąd (status
 ### Co dodać w Cloudflare
 1. Utwórz bazę D1.
 2. Podepnij binding D1 do Pages Functions (najlepiej nazwa `DB`).
-3. Jeśli używasz innej nazwy bindingu, endpointy i tak spróbują wykryć go automatycznie.
-4. (Opcjonalnie) uruchom `schema.sql` ręcznie; kod i tak tworzy tabele automatycznie przy pierwszym zapisie.
+3. Jeśli używasz innej nazwy bindingu, ustaw `D1_BINDING_NAME` na dokładną nazwę bindingu (to najpewniejsza opcja).
+4. Endpointy dodatkowo próbują auto-detekcji poprawnego bindingu D1.
+5. (Opcjonalnie) uruchom `schema.sql` ręcznie; kod i tak tworzy tabele automatycznie przy pierwszym zapisie.
 
 
 ## Oceny opinii i widoczność na stronie
