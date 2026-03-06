@@ -1,12 +1,5 @@
-import { listRecentReviews } from "./_lib/db.js";
-
-export async function onRequestGet({ env }) {
-  try {
-    const items = await listRecentReviews(env, 24);
-    return json({ ok: true, items });
-  } catch {
-    return json({ ok: false, error: "Nie udało się pobrać opinii." }, 500);
-  }
+export async function onRequestGet() {
+  return json({ ok: true, items: [] });
 }
 
 function json(obj, status = 200) {
