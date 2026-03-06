@@ -140,15 +140,23 @@ export function resolveD1DatabaseInfo(env) {
     return { db: null, bindingName: null, reason: "invalid_env", candidates: [] };
   }
 
-  const candidates = listD1Candidates(env);
-
   const configuredBindingName = String(env.D1_BINDING_NAME || "").trim();
   if (configuredBindingName) {
-    const configured = candidates.find((it) => it.name === configuredBindingName);
-    if (configured) {
-      return { db: configured.value, bindingName: configured.name, reason: "configured", candidates: candidates.map((c) => c.name) };
+    const configured = env[configuredBindingName];
+    if (isD1Binding(configured)) {
+      return {
+        db: configured,
+        bindingName: configuredBindingName,
+        reason: "configured",
+        candidates: listD1CandidateNames(env)
+      };
     }
-    return { db: null, bindingName: null, reason: "configured_not_found", candidates: candidates.map((c) => c.name) };
+    return {
+      db: null,
+      bindingName: null,
+      reason: "configured_not_found",
+      candidates: listD1CandidateNames(env)
+    };
   }
 
   const preferred = [
@@ -161,14 +169,25 @@ export function resolveD1DatabaseInfo(env) {
   ];
 
   for (const key of preferred) {
-    const cand = candidates.find((it) => it.name === key);
-    if (cand) {
-      return { db: cand.value, bindingName: cand.name, reason: "preferred", candidates: candidates.map((c) => c.name) };
+    const cand = env[key];
+    if (isD1Binding(cand)) {
+      return {
+        db: cand,
+        bindingName: key,
+        reason: "preferred",
+        candidates: listD1CandidateNames(env)
+      };
     }
   }
 
+  const candidates = listD1Candidates(env);
   if (candidates.length === 1) {
-    return { db: candidates[0].value, bindingName: candidates[0].name, reason: "single_candidate", candidates: candidates.map((c) => c.name) };
+    return {
+      db: candidates[0].value,
+      bindingName: candidates[0].name,
+      reason: "single_candidate",
+      candidates: candidates.map((c) => c.name)
+    };
   }
 
   if (candidates.length > 1) {
@@ -186,12 +205,27 @@ function listD1Candidates(env) {
     .map(([name, value]) => ({ name, value }));
 }
 
+function listD1CandidateNames(env) {
+  const names = new Set(listD1Candidates(env).map((it) => it.name));
+
+  const preferred = ["DB", "WHITECODE_PROD", "whitecode_prod", "whitecode-prod", "D1", "DATABASE"];
+  for (const key of preferred) {
+    if (isD1Binding(env?.[key])) names.add(key);
+  }
+
+  const configuredBindingName = String(env?.D1_BINDING_NAME || "").trim();
+  if (configuredBindingName && isD1Binding(env?.[configuredBindingName])) {
+    names.add(configuredBindingName);
+  }
+
+  return Array.from(names);
+}
+
 function isD1Binding(obj) {
   return Boolean(
     obj &&
     typeof obj === "object" &&
-    typeof obj.prepare === "function" &&
-    true
+    typeof obj.prepare === "function"
   );
 }
 
