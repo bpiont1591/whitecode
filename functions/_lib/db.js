@@ -114,23 +114,46 @@ export async function saveContactMessage(db, row) {
 export async function saveReview(db, row) {
   if (!db) return null;
 
-  const stmt = db.prepare(`
-    INSERT INTO reviews (
-      created_at, discord_user_id, discord_user_display,
-      review, rating, webhook_status, webhook_error
-    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
-  `).bind(
-    row.created_at,
-    row.discord_user_id,
-    row.discord_user_display,
-    row.review,
-    row.rating,
-    row.webhook_status,
-    row.webhook_error ?? null
-  );
+  try {
+    const stmt = db.prepare(`
+      INSERT INTO reviews (
+        created_at, discord_user_id, discord_user_display,
+        review, rating, webhook_status, webhook_error
+      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+    `).bind(
+      row.created_at,
+      row.discord_user_id,
+      row.discord_user_display,
+      row.review,
+      row.rating,
+      row.webhook_status,
+      row.webhook_error ?? null
+    );
 
-  const res = await stmt.run();
-  return res?.meta?.last_row_id ?? null;
+    const res = await stmt.run();
+    return res?.meta?.last_row_id ?? null;
+  } catch (error) {
+    // compatibility fallback for legacy tables that may still miss webhook_* columns
+    const message = error instanceof Error ? error.message : String(error);
+    const mentionsWebhookColumn = /webhook_status|webhook_error|no such column/i.test(message);
+    if (!mentionsWebhookColumn) throw error;
+
+    const fallbackStmt = db.prepare(`
+      INSERT INTO reviews (
+        created_at, discord_user_id, discord_user_display,
+        review, rating
+      ) VALUES (?1, ?2, ?3, ?4, ?5)
+    `).bind(
+      row.created_at,
+      row.discord_user_id,
+      row.discord_user_display,
+      row.review,
+      row.rating
+    );
+
+    const fallbackRes = await fallbackStmt.run();
+    return fallbackRes?.meta?.last_row_id ?? null;
+  }
 }
 
 export function resolveD1Database(env) {

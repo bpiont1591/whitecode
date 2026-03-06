@@ -142,6 +142,40 @@ export async function onRequestPost({ request, env }) {
           reason: dbInfo.reason,
           errorMessage: error instanceof Error ? error.message : String(error)
         });
+
+        const fallbackCandidates = Array.isArray(dbInfo.candidates) ? dbInfo.candidates : [];
+        for (const candidateName of fallbackCandidates) {
+          if (!candidateName || candidateName === dbInfo.bindingName) continue;
+
+          const candidateDb = env?.[candidateName];
+          if (!candidateDb || typeof candidateDb.prepare !== "function") continue;
+
+          try {
+            await ensureSchema(candidateDb);
+            await saveReview(candidateDb, {
+              created_at: createdAt,
+              discord_user_id: safe(user.sub),
+              discord_user_display: discordDisplay,
+              review: safe(review),
+              rating,
+              webhook_status: webhookStatus,
+              webhook_error: webhookError
+            });
+
+            persistedToDb = true;
+            dbWriteErrorCode = null;
+            console.warn("[review] persisted using fallback D1 candidate", {
+              primaryBinding: dbInfo.bindingName || null,
+              fallbackBinding: candidateName
+            });
+            break;
+          } catch (fallbackError) {
+            console.error("[review] fallback candidate save failed", {
+              fallbackBinding: candidateName,
+              errorMessage: fallbackError instanceof Error ? fallbackError.message : String(fallbackError)
+            });
+          }
+        }
       }
     } else {
       dbWriteErrorCode = "d1_binding_unavailable";
