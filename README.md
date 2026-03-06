@@ -8,7 +8,7 @@ Aby formularz działał tylko po logowaniu Discord OAuth i wysyłał dane użytk
 - `DISCORD_CLIENT_SECRET` – OAuth2 Client Secret aplikacji Discord
 - `DISCORD_REDIRECT_URI` – np. `https://whitecode.pl/auth/discord/callback`
 - `SESSION_SECRET` – długi losowy sekret do podpisywania sesji cookie
-- `D1_BINDING_NAME` – *(opcjonalnie)* nazwa bindingu D1, jeśli nie używasz standardowej nazwy `DB` (dla `DB` nie trzeba tej zmiennej)
+- `D1_BINDING_NAME` – *(opcjonalnie)* nazwa bindingu D1, jeśli nie używasz standardowej nazwy `DB` (dla `DB` nie trzeba tej zmiennej; błędna wartość nie blokuje fallbacku do `DB`)
 
 ## Endpointy auth
 - `GET /auth/discord/start`

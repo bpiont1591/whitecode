@@ -30,6 +30,8 @@ const CREATE_REVIEWS_SQL = `
 
 const ADD_REVIEWS_RATING_SQL = `ALTER TABLE reviews ADD COLUMN rating INTEGER NOT NULL DEFAULT 5`;
 
+const PREFERRED_BINDING_KEYS = ["DB", "WHITECODE_PROD", "whitecode_prod", "whitecode-prod", "D1", "DATABASE"];
+
 export async function ensureSchema(db) {
   if (!db) return;
   if (initializedSchemas.has(db)) return;
@@ -108,18 +110,18 @@ export async function resolveD1DatabaseForUsage(env) {
   const info = resolveD1DatabaseInfo(env);
   if (info.db) return info;
 
-  if (info.reason === "configured_not_found" || info.reason === "no_candidates" || info.reason === "invalid_env") {
+  if (info.reason === "no_candidates" || info.reason === "invalid_env") {
     return info;
   }
 
-  const entries = listD1Candidates(env);
+  const entries = listD1CandidatesForProbe(env);
   for (const entry of entries) {
     try {
       await ensureSchema(entry.value);
       return {
         db: entry.value,
         bindingName: entry.name,
-        reason: info.reason === "ambiguous" ? "auto_probe_ambiguous" : "auto_probe",
+        reason: info.reason.includes("ambiguous") ? "auto_probe_ambiguous" : "auto_probe",
         candidates: entries.map((it) => it.name)
       };
     } catch {
@@ -140,42 +142,27 @@ export function resolveD1DatabaseInfo(env) {
     return { db: null, bindingName: null, reason: "invalid_env", candidates: [] };
   }
 
+  const candidateNames = listD1CandidateNames(env);
   const configuredBindingName = String(env.D1_BINDING_NAME || "").trim();
-  if (configuredBindingName) {
-    const configured = env[configuredBindingName];
-    if (isD1Binding(configured)) {
-      return {
-        db: configured,
-        bindingName: configuredBindingName,
-        reason: "configured",
-        candidates: listD1CandidateNames(env)
-      };
-    }
+  const configuredExists = configuredBindingName && isD1Binding(env[configuredBindingName]);
+
+  if (configuredExists) {
     return {
-      db: null,
-      bindingName: null,
-      reason: "configured_not_found",
-      candidates: listD1CandidateNames(env)
+      db: env[configuredBindingName],
+      bindingName: configuredBindingName,
+      reason: "configured",
+      candidates: candidateNames
     };
   }
 
-  const preferred = [
-    "DB",
-    "WHITECODE_PROD",
-    "whitecode_prod",
-    "whitecode-prod",
-    "D1",
-    "DATABASE"
-  ];
-
-  for (const key of preferred) {
+  for (const key of PREFERRED_BINDING_KEYS) {
     const cand = env[key];
     if (isD1Binding(cand)) {
       return {
         db: cand,
         bindingName: key,
-        reason: "preferred",
-        candidates: listD1CandidateNames(env)
+        reason: configuredBindingName ? "configured_not_found_fallback" : "preferred",
+        candidates: candidateNames
       };
     }
   }
@@ -185,16 +172,26 @@ export function resolveD1DatabaseInfo(env) {
     return {
       db: candidates[0].value,
       bindingName: candidates[0].name,
-      reason: "single_candidate",
+      reason: configuredBindingName ? "configured_not_found_single_candidate" : "single_candidate",
       candidates: candidates.map((c) => c.name)
     };
   }
 
   if (candidates.length > 1) {
-    return { db: null, bindingName: null, reason: "ambiguous", candidates: candidates.map((c) => c.name) };
+    return {
+      db: null,
+      bindingName: null,
+      reason: configuredBindingName ? "configured_not_found_ambiguous" : "ambiguous",
+      candidates: candidates.map((c) => c.name)
+    };
   }
 
-  return { db: null, bindingName: null, reason: "no_candidates", candidates: [] };
+  return {
+    db: null,
+    bindingName: null,
+    reason: configuredBindingName ? "configured_not_found" : "no_candidates",
+    candidates: []
+  };
 }
 
 function listD1Candidates(env) {
@@ -205,20 +202,35 @@ function listD1Candidates(env) {
     .map(([name, value]) => ({ name, value }));
 }
 
-function listD1CandidateNames(env) {
-  const names = new Set(listD1Candidates(env).map((it) => it.name));
-
-  const preferred = ["DB", "WHITECODE_PROD", "whitecode_prod", "whitecode-prod", "D1", "DATABASE"];
-  for (const key of preferred) {
-    if (isD1Binding(env?.[key])) names.add(key);
-  }
+function listD1CandidatesForProbe(env) {
+  const out = [];
+  const added = new Set();
 
   const configuredBindingName = String(env?.D1_BINDING_NAME || "").trim();
-  if (configuredBindingName && isD1Binding(env?.[configuredBindingName])) {
-    names.add(configuredBindingName);
+  const preferred = configuredBindingName
+    ? [configuredBindingName, ...PREFERRED_BINDING_KEYS]
+    : [...PREFERRED_BINDING_KEYS];
+
+  for (const key of preferred) {
+    const cand = env?.[key];
+    if (isD1Binding(cand) && !added.has(key)) {
+      out.push({ name: key, value: cand });
+      added.add(key);
+    }
   }
 
-  return Array.from(names);
+  for (const item of listD1Candidates(env)) {
+    if (!added.has(item.name)) {
+      out.push(item);
+      added.add(item.name);
+    }
+  }
+
+  return out;
+}
+
+function listD1CandidateNames(env) {
+  return listD1CandidatesForProbe(env).map((it) => it.name);
 }
 
 function isD1Binding(obj) {
