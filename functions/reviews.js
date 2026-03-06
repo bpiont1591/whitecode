@@ -19,7 +19,7 @@ export async function onRequestGet({ env }) {
     }
 
     const result = await db.prepare(`
-      SELECT id, created_at, discord_user_display, review, rating
+      SELECT id, created_at, discord_user_id, discord_user_display, review, rating
       FROM reviews
       ORDER BY id DESC
       LIMIT 24

@@ -123,6 +123,7 @@ export async function onRequestPost({ request, env }) {
 
     const reviewItem = {
       created_at: createdAt,
+      discord_user_id: safe(user.sub),
       discord_user_display: discordDisplay,
       review: safe(review),
       rating

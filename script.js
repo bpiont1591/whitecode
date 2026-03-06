@@ -18,6 +18,7 @@ const API_DB_INIT = "/db/init";
     const reviewStatusEl = document.getElementById("reviewStatus");
     const reviewSubmitBtn = document.getElementById("reviewSubmitBtn");
     const liveReviewsEl = document.getElementById("liveReviews");
+    const reviewIdentityEl = document.getElementById("reviewIdentity");
 
     let reviewsAutoScrollTimer = null;
 
@@ -65,7 +66,7 @@ const API_DB_INIT = "/db/init";
             <div class="avatar"><i class="fa-brands fa-discord"></i></div>
             <div>
               <div class="review-name">${escapeHtml(it.discord_user_display || "Użytkownik Discord")}</div>
-              <div class="review-meta">Opinia ze strony</div>
+              <div class="review-meta">Opinia ze strony · ID: ${escapeHtml(it.discord_user_id || "—")}</div>
             </div>
           </div>
           <div class="stars">${stars} <span class="rating-meta">(${Number(it.rating || 0)}/5)</span></div>
@@ -156,6 +157,10 @@ function setAuthUI(user) {
       if (isAuth) {
         const visibleName = loggedUser.global_name || loggedUser.username || "Użytkownik";
         authInfoEl.textContent = `Zalogowano jako: ${visibleName} (ID: ${loggedUser.id})`;
+        if (reviewIdentityEl) {
+          reviewIdentityEl.textContent = `Dodajesz opinię jako: ${visibleName} (ID: ${loggedUser.id})`;
+          reviewIdentityEl.className = "status status-box ok";
+        }
         loginBtn.hidden = true;
         navLogoutBtn.hidden = false;
         authBoxEl.classList.add("hidden");
@@ -164,6 +169,10 @@ function setAuthUI(user) {
         document.getElementById("contact").value = loggedUser.id;
       } else {
         authInfoEl.textContent = "Wymagane logowanie przez Discord przed wysłaniem wiadomości.";
+        if (reviewIdentityEl) {
+          reviewIdentityEl.textContent = "Najpierw zaloguj się przez Discord, aby dodać opinię.";
+          reviewIdentityEl.className = "status status-box";
+        }
         loginBtn.hidden = false;
         navLogoutBtn.hidden = true;
         authBoxEl.classList.remove("hidden");
