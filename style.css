@@ -339,6 +339,22 @@ h1 span { color: var(--accent-strong); text-shadow: 0 0 22px rgba(228, 235, 255,
 
 .reviews { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
 
+.reviews-track {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  scroll-behavior: smooth;
+  padding-bottom: 6px;
+  scrollbar-width: thin;
+}
+
+.reviews-track.is-scrollable {
+  cursor: ew-resize;
+}
+
+.reviews-track .review-card {
+  flex: 0 0 min(360px, 85vw);
+}
 
 
 .live-reviews-panel {

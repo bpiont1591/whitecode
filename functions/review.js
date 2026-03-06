@@ -47,7 +47,6 @@ export async function onRequestPost({ request, env }) {
     }
 
     const webhookUrl = env.REVIEW_WEBHOOK_URL || env.DISCORD_WEBHOOK_URL;
-    if (!webhookUrl) return json({ ok: false, error: "Brak REVIEW_WEBHOOK_URL / DISCORD_WEBHOOK_URL." }, 500);
 
     const discordDisplay = formatDiscordUser(user);
     const createdAt = new Date().toISOString();
@@ -69,18 +68,22 @@ export async function onRequestPost({ request, env }) {
       }]
     };
 
-    let webhookStatus = "sent";
+    let webhookStatus = webhookUrl ? "sent" : "skipped";
     let webhookError = null;
 
-    const res = await fetch(webhookUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
+    let webhookResponseOk = true;
+    if (webhookUrl) {
+      const res = await fetch(webhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
 
-    if (!res.ok) {
-      webhookStatus = "failed";
-      webhookError = `HTTP ${res.status}`;
+      webhookResponseOk = res.ok;
+      if (!res.ok) {
+        webhookStatus = "failed";
+        webhookError = `HTTP ${res.status}`;
+      }
     }
 
     if (env.DB) {
@@ -103,7 +106,9 @@ export async function onRequestPost({ request, env }) {
       rating
     };
 
-    if (!res.ok) return json({ ok: false, error: "Discord webhook odrzucił opinię, ale zapisaliśmy ją w bazie.", item: reviewItem }, 502);
+    if (!webhookResponseOk) {
+      return json({ ok: false, error: "Discord webhook odrzucił opinię, ale zapisaliśmy ją w bazie.", item: reviewItem }, 502);
+    }
 
     return json({ ok: true, item: reviewItem });
   } catch {
