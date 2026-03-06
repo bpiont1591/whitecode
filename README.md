@@ -49,6 +49,11 @@ Opinie są zapisywane trwale do D1 (tabela `reviews`).
 
 Fallback: jeśli D1 jest chwilowo niedostępne, API może tymczasowo pokazać ostatnie opinie z pamięci runtime.
 
+`GET /db/init` wykonuje:
+- inicjalizację/migracje schematu,
+- walidację wymaganych kolumn tabeli `reviews`,
+- healthcheck write-read-delete na `reviews`.
+
 
 ## Oceny opinii i widoczność na stronie
 - Formularz opinii wymaga wyboru oceny 1-5 gwiazdek.

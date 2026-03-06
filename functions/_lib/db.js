@@ -29,6 +29,8 @@ const CREATE_REVIEWS_SQL = `
 `;
 
 const ADD_REVIEWS_RATING_SQL = `ALTER TABLE reviews ADD COLUMN rating INTEGER NOT NULL DEFAULT 5`;
+const ADD_REVIEWS_WEBHOOK_STATUS_SQL = `ALTER TABLE reviews ADD COLUMN webhook_status TEXT NOT NULL DEFAULT 'pending'`;
+const ADD_REVIEWS_WEBHOOK_ERROR_SQL = `ALTER TABLE reviews ADD COLUMN webhook_error TEXT`;
 
 const PREFERRED_BINDING_KEYS = ["DB", "WHITECODE_PROD", "whitecode_prod", "whitecode-prod", "D1", "DATABASE"];
 
@@ -46,10 +48,39 @@ export async function ensureSchema(db) {
     // column probably already exists
   }
 
+  try {
+    await runSql(db, ADD_REVIEWS_WEBHOOK_STATUS_SQL);
+  } catch {
+    // column probably already exists
+  }
+
+  try {
+    await runSql(db, ADD_REVIEWS_WEBHOOK_ERROR_SQL);
+  } catch {
+    // column probably already exists
+  }
+
   const contactOk = await tableExists(db, "contact_messages");
   const reviewsOk = await tableExists(db, "reviews");
   if (!contactOk || !reviewsOk) {
     throw new Error("schema verification failed");
+  }
+
+  const reviewColumns = await listTableColumns(db, "reviews");
+  const expectedReviewColumns = [
+    "created_at",
+    "discord_user_id",
+    "discord_user_display",
+    "review",
+    "rating",
+    "webhook_status",
+    "webhook_error"
+  ];
+
+  for (const col of expectedReviewColumns) {
+    if (!reviewColumns.has(col)) {
+      throw new Error(`reviews schema mismatch: missing column ${col}`);
+    }
   }
 
   initializedSchemas.add(db);
@@ -276,4 +307,20 @@ async function tableExists(db, tableName) {
   }
 
   throw new Error("unsupported query API shape");
+}
+
+async function listTableColumns(db, tableName) {
+  const stmt = db.prepare(`PRAGMA table_info(${escapeSqlIdentifier(tableName)})`);
+
+  if (typeof stmt.all === "function") {
+    const out = await stmt.all();
+    const rows = Array.isArray(out?.results) ? out.results : [];
+    return new Set(rows.map((row) => String(row.name || "")).filter(Boolean));
+  }
+
+  throw new Error("unsupported query API shape");
+}
+
+function escapeSqlIdentifier(name) {
+  return String(name || "").replace(/[^a-zA-Z0-9_]/g, "");
 }

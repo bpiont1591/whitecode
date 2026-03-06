@@ -252,7 +252,8 @@ function setAuthUI(user) {
         reviewForm.reset();
         reviewRatingEl.value = "5";
         if (out.warning) {
-          setReviewStatus(`Opinia zapisana ✅ (${out.warning})`, "ok");
+          const warningWithCode = out.code ? `${out.warning} (Kod: ${out.code})` : out.warning;
+          setReviewStatus(`Opinia zapisana ✅ (${warningWithCode})`, "ok");
         } else {
           setReviewStatus("Opinia wysłana ✅", "ok");
         }

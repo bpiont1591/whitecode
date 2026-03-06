@@ -110,10 +110,16 @@ export async function onRequestPost({ request, env }) {
     };
 
     let persistedToDb = false;
+    let dbWriteErrorCode = null;
     if (db) {
       try {
         await ensureSchema(db);
-      } catch {
+      } catch (error) {
+        console.error("[review] ensureSchema failed", {
+          bindingName: dbInfo.bindingName || null,
+          reason: dbInfo.reason,
+          errorMessage: error instanceof Error ? error.message : String(error)
+        });
         // try direct write to reviews even if full schema init failed
       }
 
@@ -128,9 +134,22 @@ export async function onRequestPost({ request, env }) {
           webhook_error: webhookError
         });
         persistedToDb = true;
-      } catch {
+      } catch (error) {
         persistedToDb = false;
+        dbWriteErrorCode = "d1_write_failed";
+        console.error("[review] saveReview failed", {
+          bindingName: dbInfo.bindingName || null,
+          reason: dbInfo.reason,
+          errorMessage: error instanceof Error ? error.message : String(error)
+        });
       }
+    } else {
+      dbWriteErrorCode = "d1_binding_unavailable";
+      console.error("[review] d1 unavailable", {
+        bindingName: dbInfo.bindingName || null,
+        reason: dbInfo.reason,
+        candidates: dbInfo.candidates || []
+      });
     }
 
     RECENT_REVIEWS.unshift(reviewItem);
@@ -145,7 +164,12 @@ export async function onRequestPost({ request, env }) {
     }
 
     if (!persistedToDb) {
-      return json({ ok: true, item: reviewItem, warning: "Opinia dodana, ale nie udało się zapisać jej trwale w D1." });
+      return json({
+        ok: true,
+        item: reviewItem,
+        warning: "Opinia dodana, ale nie udało się zapisać jej trwale w D1.",
+        code: dbWriteErrorCode || "d1_write_failed"
+      });
     }
 
     return json({ ok: true, item: reviewItem });
