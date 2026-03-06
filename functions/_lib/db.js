@@ -226,6 +226,108 @@ export async function deleteReviewById(db, id) {
   await db.prepare(`DELETE FROM reviews_v2 WHERE id = ?1`).bind(id).run();
 }
 
+
+
+export function hasD1HttpConfig(env) {
+  const accountId = String(env?.CF_ACCOUNT_ID || env?.CLOUDFLARE_ACCOUNT_ID || "").trim();
+  const dbId = String(env?.D1_DATABASE_ID || "").trim();
+  const apiToken = String(env?.CF_API_TOKEN || env?.CLOUDFLARE_API_TOKEN || "").trim();
+  return Boolean(accountId && dbId && apiToken);
+}
+
+export async function ensureSchemaViaHttp(env) {
+  await runD1HttpSql(env, CREATE_CONTACT_MESSAGES_SQL);
+  await runD1HttpSql(env, CREATE_REVIEWS_SQL);
+  await runD1HttpSql(env, CREATE_REVIEWS_V2_SQL);
+
+  try { await runD1HttpSql(env, ADD_REVIEWS_RATING_SQL); } catch {}
+  try { await runD1HttpSql(env, ADD_REVIEWS_WEBHOOK_STATUS_SQL); } catch {}
+  try { await runD1HttpSql(env, ADD_REVIEWS_WEBHOOK_ERROR_SQL); } catch {}
+}
+
+export async function saveReviewViaHttp(env, row) {
+  await ensureSchemaViaHttp(env);
+
+  const params = [
+    row.created_at,
+    row.discord_user_id,
+    row.discord_user_display,
+    row.review,
+    row.rating,
+    row.webhook_status,
+    row.webhook_error ?? null
+  ];
+
+  await runD1HttpSql(env, `
+    INSERT INTO reviews_v2 (
+      created_at, discord_user_id, discord_user_display,
+      review, rating, webhook_status, webhook_error
+    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+  `, params);
+
+  const rowOut = await runD1HttpFirst(env, `SELECT last_insert_rowid() AS id`);
+  return Number(rowOut?.id || 0) || null;
+}
+
+export async function listRecentReviewsViaHttp(env, limit = 24) {
+  await ensureSchemaViaHttp(env);
+  const n = Math.max(1, Math.min(100, Number(limit) || 24));
+
+  const rows = await runD1HttpAll(env, `
+    SELECT id, created_at, discord_user_id, discord_user_display, review, rating
+    FROM reviews_v2
+    ORDER BY id DESC
+    LIMIT ?1
+  `, [n]);
+
+  return rows;
+}
+
+async function runD1HttpSql(env, sql, params = []) {
+  const out = await runD1HttpQuery(env, sql, params);
+  if (!out.success) {
+    throw new Error(out.errors?.[0]?.message || "d1 http sql failed");
+  }
+  return out;
+}
+
+async function runD1HttpAll(env, sql, params = []) {
+  const out = await runD1HttpSql(env, sql, params);
+  const first = Array.isArray(out.result) ? out.result[0] : null;
+  return Array.isArray(first?.results) ? first.results : [];
+}
+
+async function runD1HttpFirst(env, sql, params = []) {
+  const rows = await runD1HttpAll(env, sql, params);
+  return rows[0] || null;
+}
+
+async function runD1HttpQuery(env, sql, params = []) {
+  const accountId = String(env?.CF_ACCOUNT_ID || env?.CLOUDFLARE_ACCOUNT_ID || "").trim();
+  const dbId = String(env?.D1_DATABASE_ID || "").trim();
+  const apiToken = String(env?.CF_API_TOKEN || env?.CLOUDFLARE_API_TOKEN || "").trim();
+
+  if (!accountId || !dbId || !apiToken) {
+    throw new Error("missing D1 HTTP config (CF_ACCOUNT_ID/CLOUDFLARE_ACCOUNT_ID, D1_DATABASE_ID, CF_API_TOKEN/CLOUDFLARE_API_TOKEN)");
+  }
+
+  const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/d1/database/${dbId}/query`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiToken}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ sql, params })
+  });
+
+  if (!res.ok) {
+    throw new Error(`D1 HTTP API error ${res.status}`);
+  }
+
+  return await res.json();
+}
+
 export function resolveD1Database(env) {
   return resolveD1DatabaseInfo(env).db;
 }

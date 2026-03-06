@@ -1,5 +1,5 @@
 import { readSessionUser } from "./_lib/auth.js";
-import { ensureSchema, resolveD1DatabaseForUsage, saveReview } from "./_lib/db.js";
+import { ensureSchema, hasD1HttpConfig, resolveD1DatabaseForUsage, saveReview, saveReviewViaHttp } from "./_lib/db.js";
 const RECENT_REVIEWS = globalThis.__WHITECODE_RECENT_REVIEWS__ || (globalThis.__WHITECODE_RECENT_REVIEWS__ = []);
 
 export async function onRequestPost({ request, env }) {
@@ -184,6 +184,27 @@ export async function onRequestPost({ request, env }) {
         reason: dbInfo.reason,
         candidates: dbInfo.candidates || []
       });
+    }
+
+    if (!persistedToDb && hasD1HttpConfig(env)) {
+      try {
+        await saveReviewViaHttp(env, {
+          created_at: createdAt,
+          discord_user_id: safe(user.sub),
+          discord_user_display: discordDisplay,
+          review: safe(review),
+          rating,
+          webhook_status: webhookStatus,
+          webhook_error: webhookError
+        });
+        persistedToDb = true;
+        dbWriteErrorCode = null;
+      } catch (httpError) {
+        dbWriteErrorCode = "d1_http_write_failed";
+        console.error("[review] d1 http fallback save failed", {
+          errorMessage: httpError instanceof Error ? httpError.message : String(httpError)
+        });
+      }
     }
 
     RECENT_REVIEWS.unshift(reviewItem);

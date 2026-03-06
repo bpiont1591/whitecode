@@ -1,10 +1,31 @@
-import { deleteReviewById, ensureSchema, resolveD1DatabaseForUsage, saveReview } from "../_lib/db.js";
+import { deleteReviewById, ensureSchema, ensureSchemaViaHttp, hasD1HttpConfig, listRecentReviewsViaHttp, resolveD1DatabaseForUsage, saveReview, saveReviewViaHttp } from "../_lib/db.js";
 
 export async function onRequestGet({ env }) {
   try {
     const dbInfo = await resolveD1DatabaseForUsage(env);
     const db = dbInfo.db;
     if (!db) {
+      if (hasD1HttpConfig(env)) {
+        await ensureSchemaViaHttp(env);
+        const id = await saveReviewViaHttp(env, {
+          created_at: new Date().toISOString(),
+          discord_user_id: "__healthcheck__",
+          discord_user_display: "__healthcheck__",
+          review: "D1 HTTP healthcheck",
+          rating: 5,
+          webhook_status: "skipped",
+          webhook_error: null
+        });
+        if (!id) throw new Error("d1 http healthcheck insert failed");
+        const items = await listRecentReviewsViaHttp(env, 5);
+        return json({
+          ok: true,
+          binding: null,
+          reason: "http_api_fallback",
+          checks: { schema: true, write_read_delete: items.length >= 1 }
+        });
+      }
+
       const hint = (dbInfo.reason === "ambiguous" || dbInfo.reason === "probe_failed")
         ? `Wykryto wiele bindingów D1 (${dbInfo.candidates.join(", ")}). Ustaw D1_BINDING_NAME lub D1_BINDING_CANDIDATES.`
         : "Ustaw poprawny D1 binding, D1_BINDING_NAME lub D1_BINDING_CANDIDATES.";

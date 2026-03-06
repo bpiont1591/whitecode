@@ -10,6 +10,9 @@ Aby formularz działał tylko po logowaniu Discord OAuth i wysyłał dane użytk
 - `SESSION_SECRET` – długi losowy sekret do podpisywania sesji cookie
 - `D1_BINDING_NAME` – *(opcjonalnie)* nazwa bindingu D1, jeśli nie używasz standardowej nazwy `DB`
 - `D1_BINDING_CANDIDATES` – *(opcjonalnie)* lista nazw bindingów D1 rozdzielona przecinkami (np. `MY_DB,PROD_DB`)
+- `D1_DATABASE_ID` – *(opcjonalnie)* ID bazy D1 do fallbacku przez Cloudflare API (gdy binding nie działa)
+- `CF_ACCOUNT_ID` lub `CLOUDFLARE_ACCOUNT_ID` – konto Cloudflare dla fallbacku API
+- `CF_API_TOKEN` lub `CLOUDFLARE_API_TOKEN` – token API z uprawnieniami D1 (Edit)
 
 ## Endpointy auth
 - `GET /auth/discord/start`

@@ -1,4 +1,4 @@
-import { ensureSchema, listRecentReviews, resolveD1DatabaseForUsage } from "./_lib/db.js";
+import { ensureSchema, hasD1HttpConfig, listRecentReviews, listRecentReviewsViaHttp, resolveD1DatabaseForUsage } from "./_lib/db.js";
 
 const RECENT_REVIEWS = globalThis.__WHITECODE_RECENT_REVIEWS__ || (globalThis.__WHITECODE_RECENT_REVIEWS__ = []);
 
@@ -8,6 +8,11 @@ export async function onRequestGet({ env }) {
     const db = dbInfo.db;
 
     if (!db) {
+      if (hasD1HttpConfig(env)) {
+        const items = await listRecentReviewsViaHttp(env, 24);
+        return json({ ok: true, items, warning: "Odczyt przez D1 HTTP API (fallback bez bindingu)." });
+      }
+
       return json({ ok: true, items: RECENT_REVIEWS.slice(0, 24), warning: "Brak D1 — pokazuję listę z pamięci runtime." });
     }
 
@@ -20,6 +25,15 @@ export async function onRequestGet({ env }) {
     const items = await listRecentReviews(db, 24);
     return json({ ok: true, items });
   } catch {
+    try {
+      if (hasD1HttpConfig(env)) {
+        const items = await listRecentReviewsViaHttp(env, 24);
+        return json({ ok: true, items, warning: "Odczyt przez D1 HTTP API (fallback po błędzie bindingu)." });
+      }
+    } catch {
+      // ignore
+    }
+
     return json({ ok: true, items: RECENT_REVIEWS.slice(0, 24), warning: "Błąd odczytu D1 — pokazuję listę z pamięci runtime." });
   }
 }
