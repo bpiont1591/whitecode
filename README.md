@@ -13,17 +13,21 @@ Odczyt na stronę idzie z:
 ## Tryby działania
 
 1. **Cloudflare D1 (produkcyjnie)**
-   - jeśli jest podpięte `env.DB`, backend automatycznie tworzy tabelę `reviews`.
+   - jeśli jest podpięte D1 w Functions, backend automatycznie tworzy i migruje tabelę `reviews`.
+   - preferowany binding: `DB`.
+   - można też użyć własnej nazwy bindingu przez `D1_BINDING_NAME`.
 
 2. **Fallback lokalny (Node)**
-   - jeśli nie ma `env.DB`, dane idą do pliku `data/profiles-db.json`.
+   - jeśli nie ma D1, dane idą do pliku `data/profiles-db.json`.
 
 3. **Fallback pamięciowy**
    - gdy brak D1 i brak dostępu do pliku, działa pamięć procesu (`MEM_DB`).
 
 ## Endpoint init
 
-- `GET /db/init` przygotowuje storage i potwierdza, że używana jest tylko tabela `reviews`.
+- `GET /db/init`
+  - zwraca błąd, jeśli runtime nie widzi D1,
+  - zwraca sukces tylko gdy tabela `reviews` jest potwierdzona.
 
 ## Wymagane sekrety
 

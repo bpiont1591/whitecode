@@ -16,7 +16,7 @@ const cookie = await createSessionCookie(user, env);
 
 let res = await initDb({ env });
 let out = await res.json();
-if (!out.ok) throw new Error(`db init failed: ${JSON.stringify(out)}`);
+if (out.ok !== true && out.mode !== "file" && out.mode !== "memory") throw new Error(`db init unexpected: ${JSON.stringify(out)}`);
 
 res = await postReview({
   request: jsonReq("https://example.com/review", { review: "Świetna współpraca", rating: 5 }, cookie),

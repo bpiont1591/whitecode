@@ -12,20 +12,53 @@ CREATE TABLE IF NOT EXISTS reviews (
   rating INTEGER NOT NULL
 )`;
 
-const CREATE_REVIEWS_CREATED_AT_INDEX = `
-CREATE INDEX IF NOT EXISTS idx_reviews_created_at ON reviews(created_at DESC)
-`;
+const CREATE_REVIEWS_CREATED_AT_INDEX = `CREATE INDEX IF NOT EXISTS idx_reviews_created_at ON reviews(created_at DESC)`;
+
+const ADD_CREATED_AT_SQL = `ALTER TABLE reviews ADD COLUMN created_at TEXT`;
+const ADD_DISCORD_ID_SQL = `ALTER TABLE reviews ADD COLUMN discord_user_id TEXT`;
+const ADD_DISCORD_DISPLAY_SQL = `ALTER TABLE reviews ADD COLUMN discord_user_display TEXT`;
+const ADD_REVIEW_SQL = `ALTER TABLE reviews ADD COLUMN review TEXT`;
+const ADD_RATING_SQL = `ALTER TABLE reviews ADD COLUMN rating INTEGER`;
+
+const PREFERRED_BINDINGS = ["DB", "D1", "DATABASE", "WHITECODE_DB", "whitcode_db", "whitecode-db"];
 
 export async function resolveD1DatabaseForUsage(env) {
-  const db = env?.DB && typeof env.DB.prepare === "function" ? env.DB : null;
-  if (!db) return { db: null, mode: "memory", reason: "missing_db_binding" };
-  return { db, mode: "d1", reason: "db_binding" };
+  const hintName = String(env?.D1_BINDING_NAME || "").trim();
+  const candidatesFromEnv = parseCandidates(env?.D1_BINDING_CANDIDATES);
+
+  const preferred = [hintName, ...candidatesFromEnv, ...PREFERRED_BINDINGS].filter(Boolean);
+  for (const key of preferred) {
+    const db = safeGetEnvKey(env, key);
+    if (isD1Like(db)) return { db, mode: "d1", reason: `binding:${key}`, bindingName: key };
+  }
+
+  const scannedKeys = collectEnvKeys(env);
+  for (const key of scannedKeys) {
+    const db = safeGetEnvKey(env, key);
+    if (isD1Like(db)) return { db, mode: "d1", reason: `scan:${key}`, bindingName: key };
+  }
+
+  return { db: null, mode: "memory", reason: "missing_db_binding", bindingName: null };
 }
 
 export async function ensureSchema(db) {
   if (!db || SCHEMA_READY.has(db)) return;
+
   await runSql(db, CREATE_REVIEWS_SQL);
   await runSql(db, CREATE_REVIEWS_CREATED_AT_INDEX);
+
+  // legacy schema support (if old reviews table exists with different columns)
+  for (const sql of [ADD_CREATED_AT_SQL, ADD_DISCORD_ID_SQL, ADD_DISCORD_DISPLAY_SQL, ADD_REVIEW_SQL, ADD_RATING_SQL]) {
+    try {
+      await runSql(db, sql);
+    } catch {
+      // already exists or incompatible runtime, ignore here and rely on insert fallbacks
+    }
+  }
+
+  const exists = await tableExists(db, "reviews");
+  if (!exists) throw new Error("reviews table not found after ensureSchema");
+
   SCHEMA_READY.add(db);
 }
 
@@ -47,17 +80,38 @@ export async function saveReview(env, row) {
   const normalized = normalizeReviewRow(row);
 
   if (store.mode === "d1") {
-    await store.db.prepare(`
-      INSERT INTO reviews (created_at, discord_user_id, discord_user_display, review, rating)
-      VALUES (?1, ?2, ?3, ?4, ?5)
-    `).bind(
-      normalized.created_at,
-      normalized.discord_user_id,
-      normalized.discord_user_display,
-      normalized.review,
-      normalized.rating
-    ).run();
-    return true;
+    // Preferred schema
+    try {
+      await store.db.prepare(`
+        INSERT INTO reviews (created_at, discord_user_id, discord_user_display, review, rating)
+        VALUES (?1, ?2, ?3, ?4, ?5)
+      `).bind(
+        normalized.created_at,
+        normalized.discord_user_id,
+        normalized.discord_user_display,
+        normalized.review,
+        normalized.rating
+      ).run();
+      return true;
+    } catch (firstError) {
+      // Legacy fallback where table may use old columns
+      try {
+        await store.db.prepare(`
+          INSERT INTO reviews (id, profile_slug, rating, reason, reviewer_account, created_at, updated_at)
+          VALUES (?1, ?2, ?3, ?4, ?5, ?6, NULL)
+        `).bind(
+          createReviewId(),
+          normalized.profile_slug || "whitecode",
+          fromStarsToLegacy(normalized.rating),
+          normalized.review,
+          normalized.reviewer_account || `dc_${normalized.discord_user_id}`,
+          normalized.created_at
+        ).run();
+        return true;
+      } catch (secondError) {
+        throw new Error(`saveReview failed: primary=${errorMsg(firstError)} fallback=${errorMsg(secondError)}`);
+      }
+    }
   }
 
   store.state.reviews.push({ id: normalized.id || createReviewId(), ...normalized });
@@ -70,18 +124,53 @@ export async function listRecentReviews(env, limit = 24) {
   const store = await ensureStorage(env);
 
   if (store.mode === "d1") {
-    const out = await store.db.prepare(`
-      SELECT id, created_at, discord_user_id, discord_user_display, review, rating
-      FROM reviews
-      ORDER BY id DESC
-      LIMIT ?1
-    `).bind(n).all();
-    return rows(out);
+    // Preferred schema
+    try {
+      const out = await store.db.prepare(`
+        SELECT id, created_at, discord_user_id, discord_user_display, review, rating
+        FROM reviews
+        ORDER BY id DESC
+        LIMIT ?1
+      `).bind(n).all();
+      return rows(out).map((r) => ({
+        id: r.id,
+        created_at: r.created_at,
+        discord_user_id: r.discord_user_id,
+        discord_user_display: r.discord_user_display,
+        review: r.review,
+        rating: normalizeRating(r.rating)
+      }));
+    } catch {
+      // Legacy fallback (profile system schema)
+      const out = await store.db.prepare(`
+        SELECT id, created_at, reviewer_account, reason, rating
+        FROM reviews
+        ORDER BY created_at DESC
+        LIMIT ?1
+      `).bind(n).all();
+      return rows(out).map((r) => {
+        const id = String(r.reviewer_account || "").replace(/^dc_/, "");
+        return {
+          id: r.id,
+          created_at: r.created_at || new Date().toISOString(),
+          discord_user_id: id,
+          discord_user_display: r.reviewer_account || "Użytkownik",
+          review: r.reason || "",
+          rating: normalizeRating(r.rating)
+        };
+      });
+    }
   }
 
   return [...store.state.reviews]
     .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")))
     .slice(0, n);
+}
+
+export async function hasReviewsTable(env) {
+  const info = await resolveD1DatabaseForUsage(env);
+  if (!info.db) return false;
+  return tableExists(info.db, "reviews");
 }
 
 export async function deleteReviewById(env, _profileSlug, reviewId) {
@@ -271,6 +360,46 @@ function fromStarsToLegacy(stars) {
 
 function rows(allResult) {
   return Array.isArray(allResult?.results) ? allResult.results : [];
+}
+
+function errorMsg(err) {
+  return err instanceof Error ? err.message : String(err);
+}
+
+function isD1Like(obj) {
+  return Boolean(obj && typeof obj.prepare === "function" && (typeof obj.exec === "function" || typeof obj.batch === "function" || typeof obj.prepare === "function"));
+}
+
+function safeGetEnvKey(env, key) {
+  try {
+    return env?.[key];
+  } catch {
+    return null;
+  }
+}
+
+function collectEnvKeys(env) {
+  const out = new Set();
+  if (!env || typeof env !== "object") return [];
+  for (const k of Object.keys(env)) out.add(k);
+  for (const k of Reflect.ownKeys(env)) if (typeof k === "string") out.add(k);
+  return [...out];
+}
+
+function parseCandidates(raw) {
+  return String(raw || "")
+    .split(",")
+    .map((x) => x.trim())
+    .filter(Boolean);
+}
+
+async function tableExists(db, tableName) {
+  try {
+    const row = await db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name = ?1 LIMIT 1`).bind(tableName).first();
+    return Boolean(row?.name);
+  } catch {
+    return false;
+  }
 }
 
 async function runSql(db, sql) {
