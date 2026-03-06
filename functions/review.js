@@ -1,5 +1,5 @@
 import { readSessionUser } from "./_lib/auth.js";
-import { ensureSchema, hasD1HttpConfig, resolveD1DatabaseForUsage, saveReview, saveReviewViaHttp } from "./_lib/db.js";
+import { ensureSchema, ensureSchemaViaHttp, hasD1HttpConfig, resolveD1DatabaseForUsage, saveReview, saveReviewViaHttp } from "./_lib/db.js";
 const RECENT_REVIEWS = globalThis.__WHITECODE_RECENT_REVIEWS__ || (globalThis.__WHITECODE_RECENT_REVIEWS__ = []);
 
 export async function onRequestPost({ request, env }) {
@@ -188,7 +188,8 @@ export async function onRequestPost({ request, env }) {
 
     if (!persistedToDb && hasD1HttpConfig(env)) {
       try {
-        await saveReviewViaHttp(env, {
+        await ensureSchemaViaHttp(env);
+        const httpId = await saveReviewViaHttp(env, {
           created_at: createdAt,
           discord_user_id: safe(user.sub),
           discord_user_display: discordDisplay,
@@ -197,13 +198,41 @@ export async function onRequestPost({ request, env }) {
           webhook_status: webhookStatus,
           webhook_error: webhookError
         });
-        persistedToDb = true;
-        dbWriteErrorCode = null;
+
+        if (!httpId) {
+          dbWriteErrorCode = "d1_http_write_no_rowid";
+        } else {
+          persistedToDb = true;
+          dbWriteErrorCode = null;
+        }
       } catch (httpError) {
         dbWriteErrorCode = "d1_http_write_failed";
         console.error("[review] d1 http fallback save failed", {
           errorMessage: httpError instanceof Error ? httpError.message : String(httpError)
         });
+      }
+    }
+
+    if (!persistedToDb) {
+      const retryResult = await retryDurableSave({
+        env,
+        dbInfo,
+        row: {
+          created_at: createdAt,
+          discord_user_id: safe(user.sub),
+          discord_user_display: discordDisplay,
+          review: safe(review),
+          rating,
+          webhook_status: webhookStatus,
+          webhook_error: webhookError
+        }
+      });
+
+      if (retryResult.ok) {
+        persistedToDb = true;
+        dbWriteErrorCode = null;
+      } else if (retryResult.code) {
+        dbWriteErrorCode = retryResult.code;
       }
     }
 
@@ -229,6 +258,44 @@ export async function onRequestPost({ request, env }) {
     return json({ ok: true, item: reviewItem });
   } catch {
     return json({ ok: false, error: "Błąd serwera podczas dodawania opinii." }, 500);
+  }
+}
+
+async function retryDurableSave({ env, dbInfo, row }) {
+  try {
+    if (hasD1HttpConfig(env)) {
+      try {
+        await ensureSchemaViaHttp(env);
+        const id = await saveReviewViaHttp(env, row);
+        if (id) return { ok: true };
+      } catch {
+        // try binding path below
+      }
+    }
+
+    const refreshed = await resolveD1DatabaseForUsage(env);
+    if (refreshed?.db) {
+      try {
+        await ensureSchema(refreshed.db);
+      } catch {
+        // continue
+      }
+
+      await saveReview(refreshed.db, row);
+      return { ok: true };
+    }
+
+    if (!refreshed?.db && hasD1HttpConfig(env)) {
+      return { ok: false, code: "d1_http_write_no_rowid" };
+    }
+
+    if (!refreshed?.db) {
+      return { ok: false, code: "d1_binding_unavailable" };
+    }
+
+    return { ok: false, code: "d1_write_failed" };
+  } catch {
+    return { ok: false, code: "d1_write_retry_failed" };
   }
 }
 
