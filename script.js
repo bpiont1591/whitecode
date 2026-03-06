@@ -125,6 +125,12 @@ const API_DB_INIT = "/db/init";
       try {
         const res = await fetch(API_REVIEWS, { cache: "no-store" });
         const out = await res.json().catch(() => ({ items: [] }));
+
+        if (!res.ok || !out.ok) {
+          liveReviewsEl.innerHTML = `<div class="status status-box err">${escapeHtml(out.error || "Nie udało się załadować opinii.")}</div>`;
+          return;
+        }
+
         const items = Array.isArray(out.items) ? out.items : [];
         renderLiveReviews(items);
       } catch {

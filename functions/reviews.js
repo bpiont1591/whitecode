@@ -11,7 +11,13 @@ export async function onRequestGet({ env }) {
       return json({ ok: false, items: [], error: `Brak bindowania D1 w Functions. ${hint}` }, 500);
     }
 
-    await ensureSchema(db);
+    let schemaWarning = null;
+    try {
+      await ensureSchema(db);
+    } catch {
+      schemaWarning = "Nie udało się zainicjalizować pełnego schematu D1; próbuję odczytać istniejące opinie.";
+    }
+
     const result = await db.prepare(`
       SELECT id, created_at, discord_user_display, review, rating
       FROM reviews
@@ -20,9 +26,9 @@ export async function onRequestGet({ env }) {
     `).all();
 
     const items = Array.isArray(result?.results) ? result.results : [];
-    return json({ ok: true, items });
+    return json({ ok: true, items, warning: schemaWarning });
   } catch {
-    return json({ ok: false, items: [], error: "Nie udało się pobrać opinii z bazy D1 (sprawdź binding i utworzenie tabel)." }, 500);
+    return json({ ok: false, items: [], error: "Nie udało się pobrać opinii z bazy D1 (sprawdź binding i tabelę reviews)." }, 500);
   }
 }
 
