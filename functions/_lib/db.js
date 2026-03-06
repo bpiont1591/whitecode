@@ -101,12 +101,25 @@ export async function saveReview(db, row) {
 }
 
 export function resolveD1Database(env) {
-  if (!env || typeof env !== "object") return null;
+  return resolveD1DatabaseInfo(env).db;
+}
+
+export function resolveD1DatabaseInfo(env) {
+  if (!env || typeof env !== "object") {
+    return { db: null, bindingName: null, reason: "invalid_env", candidates: [] };
+  }
+
+  const candidates = Object.entries(env)
+    .filter(([, value]) => isD1Binding(value))
+    .map(([name, value]) => ({ name, value }));
 
   const configuredBindingName = String(env.D1_BINDING_NAME || "").trim();
   if (configuredBindingName) {
-    const configured = env[configuredBindingName];
-    if (isD1Binding(configured)) return configured;
+    const configured = candidates.find((it) => it.name === configuredBindingName);
+    if (configured) {
+      return { db: configured.value, bindingName: configured.name, reason: "configured", candidates: candidates.map((c) => c.name) };
+    }
+    return { db: null, bindingName: null, reason: "configured_not_found", candidates: candidates.map((c) => c.name) };
   }
 
   const preferred = [
@@ -119,15 +132,21 @@ export function resolveD1Database(env) {
   ];
 
   for (const key of preferred) {
-    const cand = env[key];
-    if (isD1Binding(cand)) return cand;
+    const cand = candidates.find((it) => it.name === key);
+    if (cand) {
+      return { db: cand.value, bindingName: cand.name, reason: "preferred", candidates: candidates.map((c) => c.name) };
+    }
   }
 
-  for (const value of Object.values(env)) {
-    if (isD1Binding(value)) return value;
+  if (candidates.length === 1) {
+    return { db: candidates[0].value, bindingName: candidates[0].name, reason: "single_candidate", candidates: candidates.map((c) => c.name) };
   }
 
-  return null;
+  if (candidates.length > 1) {
+    return { db: null, bindingName: null, reason: "ambiguous", candidates: candidates.map((c) => c.name) };
+  }
+
+  return { db: null, bindingName: null, reason: "no_candidates", candidates: [] };
 }
 
 function isD1Binding(obj) {

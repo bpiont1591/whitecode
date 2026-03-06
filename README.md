@@ -54,7 +54,7 @@ Dane zapisują się nawet jeśli Discord webhook chwilowo zwróci błąd (status
 1. Utwórz bazę D1.
 2. Podepnij binding D1 do Pages Functions (najlepiej nazwa `DB`).
 3. Jeśli używasz innej nazwy bindingu, ustaw `D1_BINDING_NAME` na dokładną nazwę bindingu (to najpewniejsza opcja).
-4. Endpointy dodatkowo próbują auto-detekcji poprawnego bindingu D1.
+4. Endpointy dodatkowo próbują auto-detekcji poprawnego bindingu D1, ale jeśli masz wiele bindingów D1 ustaw `D1_BINDING_NAME`, żeby uniknąć zapisu do niewłaściwej bazy.
 5. Tabele `reviews` i `contact_messages` są tworzone automatycznie przy pierwszym zapisie i dodatkowo weryfikowane po stronie backendu.
 6. (Opcjonalnie) uruchom `schema.sql` ręcznie, jeśli chcesz przygotować schemat z wyprzedzeniem.
 

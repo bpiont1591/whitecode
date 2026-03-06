@@ -1,10 +1,14 @@
-import { ensureSchema, resolveD1Database } from "./_lib/db.js";
+import { ensureSchema, resolveD1DatabaseInfo } from "./_lib/db.js";
 
 export async function onRequestGet({ env }) {
   try {
-    const db = resolveD1Database(env);
+    const dbInfo = resolveD1DatabaseInfo(env);
+    const db = dbInfo.db;
     if (!db) {
-      return json({ ok: false, items: [], error: "Brak bindowania D1 w Functions." }, 500);
+      const hint = dbInfo.reason === "ambiguous"
+        ? `Wykryto wiele bindingów D1 (${dbInfo.candidates.join(", ")}). Ustaw D1_BINDING_NAME.`
+        : "Ustaw poprawny D1 binding lub D1_BINDING_NAME.";
+      return json({ ok: false, items: [], error: `Brak bindowania D1 w Functions. ${hint}` }, 500);
     }
 
     await ensureSchema(db);
