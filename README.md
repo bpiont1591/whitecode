@@ -16,6 +16,7 @@ Aby formularz działał tylko po logowaniu Discord OAuth i wysyłał dane użytk
 - `GET /auth/me`
 - `POST /auth/logout`
 - `GET /reviews`
+- `GET /db/init`
 
 ## Ustawienia Discord OAuth
 W panelu Discord Developer Portal:
@@ -56,7 +57,8 @@ Dane zapisują się nawet jeśli Discord webhook chwilowo zwróci błąd (status
 3. Jeśli używasz innej nazwy bindingu, ustaw `D1_BINDING_NAME` na dokładną nazwę bindingu (to najpewniejsza opcja).
 4. Endpointy dodatkowo próbują auto-detekcji i testu użycia bindingu D1, ale jeśli masz wiele bindingów D1 ustaw `D1_BINDING_NAME`, żeby jednoznacznie wskazać bazę.
 5. Tabele `reviews` i `contact_messages` są tworzone automatycznie przy pierwszym zapisie i dodatkowo weryfikowane po stronie backendu.
-6. (Opcjonalnie) uruchom `schema.sql` ręcznie, jeśli chcesz przygotować schemat z wyprzedzeniem.
+6. Strona wykonuje też cichy warmup (`GET /db/init`) przy ładowaniu, aby przygotować tabele wcześniej.
+7. (Opcjonalnie) uruchom `schema.sql` ręcznie, jeśli chcesz przygotować schemat z wyprzedzeniem.
 
 
 ## Oceny opinii i widoczność na stronie
