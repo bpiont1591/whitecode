@@ -136,6 +136,8 @@
           <p>Logowanie akcji, statystyki aktywności i raporty ułatwiające rozwój community.</p>
         </article>
       </div>
+
+      
     </section>
 
     <section id="moduly">
@@ -181,7 +183,22 @@
           <p class="review-text">„Bardzo sprawna współpraca i finalny efekt dokładnie zgodny z ustaleniami.”</p>
         </article>
       </div>
-    </section>
+    
+
+      <div class="panel review-submit-panel">
+        <h3>Dodaj opinię (tylko wybrana ranga Discord)</h3>
+        <p class="panel-sub">Po zalogowaniu możesz wysłać opinię, ale tylko jeśli masz rolę <code>1448144394426388622</code> na naszym serwerze.</p>
+
+        <form id="reviewForm" class="review-form">
+          <label for="reviewMessage">Twoja opinia</label>
+          <textarea id="reviewMessage" name="reviewMessage" placeholder="Napisz krótką opinię o współpracy..." required></textarea>
+          <button id="reviewSubmitBtn" class="btn btn-ghost" type="submit" disabled>
+            <i class="fa-solid fa-star"></i> Wyślij opinię
+          </button>
+          <div id="reviewStatus" class="status status-box" aria-live="polite"></div>
+        </form>
+      </div>
+</section>
 
     <section id="kontakt">
       <h2 class="section-title">Skontaktuj się z nami</h2>
@@ -294,6 +311,7 @@
     const API_CONTACT = "/contact";
     const API_ME = "/auth/me";
     const API_LOGOUT = "/auth/logout";
+    const API_REVIEW = "/review";
 
     const form = document.getElementById("contactForm");
     const statusEl = document.getElementById("status");
@@ -301,6 +319,11 @@
     const charCountEl = document.getElementById("charCount");
     const hpEl = document.getElementById("website");
     const submitBtn = form.querySelector('button[type="submit"]');
+
+    const reviewForm = document.getElementById("reviewForm");
+    const reviewMessageEl = document.getElementById("reviewMessage");
+    const reviewStatusEl = document.getElementById("reviewStatus");
+    const reviewSubmitBtn = document.getElementById("reviewSubmitBtn");
 
     const authBoxEl = document.getElementById("authBox");
     const authInfoEl = document.getElementById("authInfo");
@@ -319,10 +342,16 @@
       charCountEl.textContent = `${len}/4000`;
     }
 
+    function setReviewStatus(msg, type) {
+      reviewStatusEl.textContent = msg;
+      reviewStatusEl.className = "status status-box " + (type || "");
+    }
+
     function setAuthUI(user) {
       loggedUser = user || null;
       const isAuth = Boolean(loggedUser && loggedUser.id);
       submitBtn.disabled = !isAuth;
+      reviewSubmitBtn.disabled = !isAuth;
 
       if (isAuth) {
         const visibleName = loggedUser.global_name || loggedUser.username || "Użytkownik";
@@ -365,6 +394,48 @@
     updateCount();
     refreshAuth();
     messageEl.addEventListener("input", updateCount);
+
+
+    reviewForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      if (!loggedUser) {
+        setReviewStatus("Najpierw zaloguj się przez Discord.", "err");
+        return;
+      }
+
+      const review = (reviewMessageEl.value || "").trim();
+      if (!review) {
+        setReviewStatus("Wpisz treść opinii.", "err");
+        return;
+      }
+
+      if (review.length > 1200) {
+        setReviewStatus("Opinia jest za długa (max 1200 znaków).", "err");
+        return;
+      }
+
+      setReviewStatus("Wysyłam opinię…", "");
+      try {
+        const res = await fetch(API_REVIEW, {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ review })
+        });
+
+        const out = await res.json().catch(() => ({}));
+        if (!res.ok || !out.ok) {
+          setReviewStatus(out.error || "Nie udało się wysłać opinii.", "err");
+          return;
+        }
+
+        reviewForm.reset();
+        setReviewStatus("Opinia wysłana ✅", "ok");
+      } catch {
+        setReviewStatus("Błąd sieci. Spróbuj ponownie.", "err");
+      }
+    });
 
     form.addEventListener("submit", async (e) => {
       e.preventDefault();

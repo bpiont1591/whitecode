@@ -28,3 +28,14 @@ W panelu Discord Developer Portal:
   - sprawdzanie `Origin` / `Referer`,
   - wymóg `Content-Type: application/json`,
   - whitelista tematów formularza.
+
+
+## Ograniczenie dodawania opinii po roli Discord
+Dodany endpoint `POST /review` wymaga:
+- zalogowanego użytkownika Discord,
+- członkostwa w serwerze (`DISCORD_GUILD_ID`),
+- posiadania roli recenzenta (`REVIEWER_ROLE_ID`, domyślnie `1448144394426388622`),
+- tokenu bota (`DISCORD_BOT_TOKEN`) do weryfikacji ról przez Discord API.
+
+Opcjonalnie możesz ustawić osobny webhook dla opinii:
+- `REVIEW_WEBHOOK_URL` (fallback: `DISCORD_WEBHOOK_URL`).
