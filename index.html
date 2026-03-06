@@ -3,363 +3,269 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>WH!TEcode™ | Profesjonalne Boty Discord</title>
+  <meta name="description" content="WH!TEcode tworzy profesjonalne boty Discord: automatyzacje, moderacja, tickety i systemy premium." />
+  <meta name="keywords" content="bot discord, boty discord, discord developer, automatyzacja discord, tworzenie botów" />
+  <meta name="author" content="WH!TEcode" />
+  <meta name="robots" content="index, follow, max-image-preview:large" />
+  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin />
+  <link rel="canonical" href="https://whitecode.pl/" />
 
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="WH!TEcode" />
+  <meta property="og:title" content="WH!TEcode™ | Profesjonalne boty Discord" />
+  <meta property="og:description" content="Tworzymy profesjonalne boty Discord: stabilne, bezpieczne i dopasowane do Twojego serwera." />
+  <meta property="og:url" content="https://whitecode.pl/" />
+  <meta property="og:image" content="https://whitecode.pl/logo.png" />
+
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="WH!TEcode™ | Profesjonalne boty Discord" />
+  <meta name="twitter:description" content="Boty Discord pisane pod Twój serwer. Jakość, bezpieczeństwo i szybka realizacja." />
+  <meta name="twitter:image" content="https://whitecode.pl/logo.png" />
+  <title>WH!TEcode™ | Profesjonalne boty Discord</title>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "ProfessionalService",
+    "name": "WH!TEcode",
+    "url": "https://whitecode.pl/",
+    "logo": "https://whitecode.pl/logo.png",
+    "description": "Profesjonalne tworzenie botów Discord i automatyzacji community.",
+    "serviceType": "Discord Bot Development",
+    "areaServed": "PL"
+  }
+  </script>
 </head>
-
 <body>
-  <div class="noise"></div>
+  <div class="noise" aria-hidden="true"></div>
 
-  <!-- NAV -->
-  <div class="nav">
+  <nav class="nav" aria-label="Nawigacja główna">
     <div class="nav-inner">
       <a class="brand" href="#top" aria-label="Strona główna">
-        <img src="logo.png" alt="WH!TEcode Logo" />
+        <img src="logo.png" alt="WH!TEcode logo" />
         <strong>WH!TEcode™</strong>
       </a>
 
       <div class="nav-links">
-        <a href="#dlaczego">Dlaczego my</a>
-        <a href="#opinie">Opinie</a>
-        <a href="#wspolpraca">Współpraca</a>
+        <a href="#oferta">Oferta</a>
         <a href="#kontakt">Kontakt</a>
+        <button id="navLogoutBtn" class="nav-logout" type="button" hidden><i class="fa-solid fa-right-from-bracket"></i> Wyloguj</button>
       </div>
     </div>
-  </div>
+  </nav>
 
-  <!-- HERO -->
-  <header id="top">
-    <!-- logo wyśrodkowane i animowane -->
-    <img src="logo.png" alt="WH!TEcode Logo" class="logo-img" />
-
-    <h1>WH!TE<span>code</span>™</h1>
+  <header id="top" class="hero">
+    <p class="eyebrow">Software studio • Discord automation</p>
+    <h1>Boty Discord, które wyglądają i działają <span>profesjonalnie</span></h1>
     <p class="subtitle">
-      Profesjonalne boty Discord pisane pod Twój serwer. Konkret, jakość i szybka realizacja.
+      Projektujemy i wdrażamy dedykowane boty dla społeczności, marek i serwerów sprzedażowych.
+      Stabilny kod, czytelny UX i wsparcie po wdrożeniu.
     </p>
 
     <div class="hero-actions">
       <a class="btn btn-primary" href="#kontakt">
-        <i class="fa-solid fa-paper-plane"></i>
-        Kontakt
+        <i class="fa-solid fa-paper-plane"></i> Zamów wycenę
       </a>
-      <a class="btn btn-ghost" href="#opinie">
-        <i class="fa-solid fa-star"></i>
-        Opinie
+      <a class="btn btn-ghost" href="#oferta">
+        <i class="fa-solid fa-briefcase"></i> Zobacz ofertę
       </a>
+    </div>
+
+    <div class="hero-metrics" aria-label="Najważniejsze informacje">
+      <article>
+        <strong>24h</strong>
+        <span>średni czas pierwszej odpowiedzi</span>
+      </article>
+      <article>
+        <strong>99.9%</strong>
+        <span>stabilność po wdrożeniu</span>
+      </article>
+      <article>
+        <strong>Indywidualnie</strong>
+        <span>zakres dopasowany do Twojego serwera</span>
+      </article>
     </div>
   </header>
 
-  <!-- DLACZEGO -->
-  <section id="dlaczego">
-    <h2 class="section-title">Dlaczego <span class="glow">WH!TEcode</span>?</h2>
-    <p class="section-subtitle">
-      Bot ma działać szybko i stabilnie — a nie tylko “na chwilę”.
-    </p>
+  <main>
+    <section id="oferta">
+      <h2 class="section-title">Co dostajesz w <span class="glow">WH!TEcode</span></h2>
+      <p class="section-subtitle">Kompletne rozwiązanie: od analizy po gotowe wdrożenie i wsparcie.</p>
 
-    <div class="grid">
-      <div class="card">
-        <div class="icon-box"><i class="fa-solid fa-bolt"></i></div>
-        <h3>Szybkość</h3>
-        <p>Komendy działają płynnie, bez lagów i zbędnego czekania.</p>
+      <div class="grid">
+        <article class="card">
+          <div class="icon-box"><i class="fa-solid fa-shield"></i></div>
+          <h3>Bezpieczna architektura</h3>
+          <p>Walidacja danych, kontrola uprawnień i odporność na nadużycia.</p>
+        </article>
+        <article class="card">
+          <div class="icon-box"><i class="fa-solid fa-bolt"></i></div>
+          <h3>Szybkie działanie</h3>
+          <p>Optymalna wydajność komend, eventów i zadań cyklicznych.</p>
+        </article>
+        <article class="card">
+          <div class="icon-box"><i class="fa-solid fa-pen-ruler"></i></div>
+          <h3>Custom UX</h3>
+          <p>Embeds, przyciski i selekty dopasowane do Twojego brandingu.</p>
+        </article>
+        <article class="card">
+          <div class="icon-box"><i class="fa-solid fa-layer-group"></i></div>
+          <h3>Modułowy rozwój</h3>
+          <p>Możesz łatwo rozbudowywać projekt o kolejne funkcje bez przepisywania całości.</p>
+        </article>
+        <article class="card">
+          <div class="icon-box"><i class="fa-solid fa-ticket"></i></div>
+          <h3>Systemy ticketowe</h3>
+          <p>Automatyzacja obsługi użytkowników, zgłoszeń i workflow zespołu.</p>
+        </article>
+        <article class="card">
+          <div class="icon-box"><i class="fa-brands fa-discord"></i></div>
+          <h3>Discord-first</h3>
+          <p>Tworzymy rozwiązania stricte pod Discord API i realne potrzeby społeczności.</p>
+        </article>
+        <article class="card">
+          <div class="icon-box"><i class="fa-solid fa-user-shield"></i></div>
+          <h3>Panel administracyjny</h3>
+          <p>Przejrzyste komendy i role dla moderatorów, supportu i właścicieli serwera.</p>
+        </article>
+        <article class="card">
+          <div class="icon-box"><i class="fa-solid fa-chart-line"></i></div>
+          <h3>Analityka i logi</h3>
+          <p>Logowanie akcji, statystyki aktywności i raporty ułatwiające rozwój community.</p>
+        </article>
       </div>
 
-      <div class="card">
-        <div class="icon-box"><i class="fa-solid fa-shield"></i></div>
-        <h3>Bezpieczeństwo</h3>
-        <p>Uprawnienia, walidacja danych i zabezpieczenia pod nadużycia.</p>
+      
+    </section>
+
+    <section id="moduly">
+      <h2 class="section-title">Przykładowe <span class="glow">moduły bota</span></h2>
+      <p class="section-subtitle">Więcej kafelków, więcej konkretów — możesz wybrać gotowe bloki lub zamówić własne funkcje.</p>
+      <div class="grid modules-grid">
+        <article class="feature-tile"><i class="fa-solid fa-ticket-simple"></i><h3>Tickety</h3><p>Obsługa zgłoszeń i automatyczne przypisywanie supportu.</p></article>
+        <article class="feature-tile"><i class="fa-solid fa-user-check"></i><h3>Weryfikacja</h3><p>Onboarding użytkowników i kontrola dostępu.</p></article>
+        <article class="feature-tile"><i class="fa-solid fa-gavel"></i><h3>Moderacja</h3><p>Warny, timeouty, automod i zabezpieczenia anty-spam.</p></article>
+        <article class="feature-tile"><i class="fa-solid fa-trophy"></i><h3>Leveling</h3><p>System poziomów, role progresu i nagrody dla aktywnych.</p></article>
+        <article class="feature-tile"><i class="fa-solid fa-store"></i><h3>Sklep / economy</h3><p>Waluta serwerowa, sklepy, itemy i automatyczne transakcje.</p></article>
+        <article class="feature-tile"><i class="fa-solid fa-calendar-check"></i><h3>Eventy</h3><p>Zapisy na wydarzenia, przypomnienia i harmonogramy.</p></article>
+        <article class="feature-tile"><i class="fa-solid fa-bell"></i><h3>Powiadomienia</h3><p>Alerty kanałowe i integracje webhook/API.</p></article>
+        <article class="feature-tile"><i class="fa-solid fa-clipboard-check"></i><h3>Audyt logów</h3><p>Historia zmian i szybkie odtwarzanie incydentów.</p></article>
       </div>
+    </section>
 
-      <div class="card">
-        <div class="icon-box"><i class="fa-solid fa-screwdriver-wrench"></i></div>
-        <h3>Custom</h3>
-        <p>Funkcje dopasowane do Twojego serwera i stylu działania.</p>
-      </div>
 
-      <div class="card">
-        <div class="icon-box"><i class="fa-solid fa-layer-group"></i></div>
-        <h3>Rozbudowa</h3>
-        <p>Modułowa budowa — łatwo dodać nowe funkcje w przyszłości.</p>
-      </div>
+    
 
-      <div class="card">
-        <div class="icon-box"><i class="fa-solid fa-ticket"></i></div>
-        <h3>Wsparcie</h3>
-        <p>Szybka pomoc i poprawki, kiedy trzeba coś dopracować.</p>
-      </div>
+    <section id="kontakt">
+      <h2 class="section-title">Skontaktuj się z nami</h2>
+      <p class="section-subtitle">Opisz swój serwer i zakres prac — wrócimy z konkretną propozycją.</p>
 
-      <div class="card">
-        <div class="icon-box"><i class="fa-brands fa-discord"></i></div>
-        <h3>Discord-first</h3>
-        <p>Embeds, przyciski, selekty, logi — wszystko czytelne i wygodne.</p>
-      </div>
-    </div>
-  </section>
-
-  <!-- OPINIE -->
-  <section id="opinie">
-    <h2 class="section-title">Opinie <span class="glow">klientów</span></h2>
-    <p class="section-subtitle">Z Discorda — krótko i konkretnie.</p>
-
-    <div class="grid">
-      <div class="review-card">
-        <div class="review-header">
-          <div class="avatar"><i class="fa-brands fa-discord"></i></div>
-          <div>
-            <div class="review-name">𝖟𝖊𝖙𝖔𝖔𝖔</div>
-            <div class="review-meta">Klient Discord</div>
+      <div class="contact-grid">
+        <aside class="contact-aside">
+          <div class="contact-card">
+            <div class="contact-card-icon"><i class="fa-brands fa-discord"></i></div>
+            <div>
+              <div class="contact-card-title">Najszybciej: Discord</div>
+              <div class="contact-card-text">Dołącz do serwera i napisz na ticket.</div>
+              <a class="contact-link" href="https://discord.gg/WDjKTnmD4U" target="_blank" rel="noreferrer">Otwórz serwer <i class="fa-solid fa-arrow-up-right-from-square"></i></a>
+            </div>
           </div>
-        </div>
-        <div class="stars">
-          <i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i>
-        </div>
-        <p class="review-text">"Szybkie i bardzo dobre wykonanie bota"</p>
-      </div>
-
-      <div class="review-card">
-        <div class="review-header">
-          <div class="avatar"><i class="fa-brands fa-discord"></i></div>
-          <div>
-            <div class="review-name">Loczek</div>
-            <div class="review-meta">Klient Discord</div>
+          <div class="contact-card">
+            <div class="contact-card-icon"><i class="fa-solid fa-envelope"></i></div>
+            <div>
+              <div class="contact-card-title">E-mail</div>
+              <div class="contact-card-text">Preferujesz kontakt asynchroniczny? Napisz wiadomość.</div>
+              <a class="contact-link" href="mailto:lightningcodes001@gmail.com">lightningcodes001@gmail.com</a>
+            </div>
           </div>
-        </div>
-        <div class="stars">
-          <i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i>
-        </div>
-        <p class="review-text">"Zajebisty bocisz i współpraca. Klasa"</p>
-      </div>
-    </div>
-  </section>
+        </aside>
 
-  <!-- CTA -->
-  <section id="wspolpraca">
-    <div class="cta">
-      <h2>Gotowy na <span class="glow">współpracę</span>?</h2>
-      <p>Wbij na Discord albo napisz przez formularz.</p>
+        <div class="panel contact-panel">
+          <h3>Formularz kontaktowy</h3>
+          <p class="panel-sub">Im więcej szczegółów, tym szybciej przygotujemy wycenę.</p>
 
-      <div class="hero-actions" style="margin-top: 10px;">
-        <a class="btn btn-primary" href="https://discord.gg/YCsPKP5VEJ" target="_blank" rel="noreferrer">
-          <i class="fa-brands fa-discord"></i> Nasz Discord
-        </a>
-        <a class="btn btn-ghost" href="#kontakt">
-          <i class="fa-solid fa-envelope"></i> Kontakt
-        </a>
-      </div>
-    </div>
-  </section>
-
-  <!-- KONTAKT -->
-  <section id="kontakt">
-    <h2 class="section-title">Kontakt <span class="glow">bez spiny</span></h2>
-    <p class="section-subtitle">
-      Napisz, co potrzebujesz — wróci to do nas na Discord i odpiszemy możliwie szybko.
-    </p>
-
-    <div class="contact-grid">
-      <!-- Lewa kolumna: szybkie opcje + info -->
-      <aside class="contact-aside">
-        <div class="contact-card">
-          <div class="contact-card-icon"><i class="fa-brands fa-discord"></i></div>
-          <div class="contact-card-body">
-            <div class="contact-card-title">Najszybciej: Discord</div>
-            <div class="contact-card-text">Wbij na serwer i napisz na tickecie albo prywatnie.</div>
-            <a class="contact-link" href="https://discord.gg/WDjKTnmD4U" target="_blank" rel="noreferrer">
-              Otwórz serwer <i class="fa-solid fa-arrow-up-right-from-square"></i>
-            </a>
+          <div class="auth-box" id="authBox">
+            <div id="authInfo" class="auth-info">Wymagane logowanie przez Discord przed wysłaniem wiadomości.</div>
+            <div class="auth-actions">
+              <a id="discordLoginBtn" class="btn btn-ghost" href="/auth/discord/start?returnTo=/#kontakt">
+                <i class="fa-brands fa-discord"></i> Zaloguj przez Discord
+              </a>
+            </div>
           </div>
-        </div>
 
-        <div class="contact-card">
-          <div class="contact-card-icon"><i class="fa-solid fa-envelope"></i></div>
-          <div class="contact-card-body">
-            <div class="contact-card-title">E-mail</div>
-            <div class="contact-card-text">Dobre do dłuższych opisów i plików.</div>
-            <a class="contact-link" href="mailto:lightningcodes001@gmail.com">
-              lightningcodes001@gmail.com
-            </a>
-          </div>
-        </div>
-
-        <div class="contact-mini">
-          <div class="mini-pill"><i class="fa-solid fa-clock"></i> Zwykle odpisujemy w 24h</div>
-          <div class="mini-pill"><i class="fa-solid fa-shield"></i> Bez udostępniania danych</div>
-          <div class="mini-pill"><i class="fa-solid fa-location-dot"></i> Dortmund (Niemcy) / online</div>
-        </div>
-      </aside>
-
-      <!-- Prawa kolumna: formularz -->
-      <div class="panel contact-panel">
-        <div class="panel-head">
-          <div>
-            <h3>Formularz kontaktowy</h3>
-            <p class="panel-sub">Krótko i konkretnie — tym szybciej zrobimy wycenę.</p>
-          </div>
-        </div>
-
-        <form id="contactForm" class="contact-form">
-          <div class="form-row">
-            <div class="field">
-              <label for="name">Nick / Imię</label>
-              <div class="input-wrap">
-                <i class="fa-solid fa-user"></i>
-                <input id="name" name="name" type="text" placeholder="np. Piotrek / User123" required />
+          <form id="contactForm" class="contact-form">
+            <div class="form-row">
+              <div class="field">
+                <label for="name">Nick Discord (auto)</label>
+                <input id="name" name="name" type="text" readonly required />
+              </div>
+              <div class="field">
+                <label for="contact">ID Discord (auto)</label>
+                <input id="contact" name="contact" type="text" readonly required />
               </div>
             </div>
 
             <div class="field">
-              <label for="contact">Kontakt (Discord / e-mail)</label>
-              <div class="input-wrap">
-                <i class="fa-solid fa-at"></i>
-                <input id="contact" name="contact" type="text" placeholder="np. @twojNick lub mail" required />
-              </div>
+              <label for="topic">Temat</label>
+              <select id="topic" name="topic" required>
+                <option value="" selected disabled>Wybierz temat…</option>
+                <option value="Bot Discord">Bot Discord</option>
+                <option value="Strona Internetowa">Strona Internetowa</option>
+                <option value="Inne">Inne</option>
+              </select>
             </div>
-          </div>
 
-          <div class="field">
-            <label for="topic">Temat</label>
-            <div class="input-wrap">
-              <i class="fa-solid fa-tag"></i>
-              <input id="topic" name="topic" type="text" placeholder="np. Tickety + logi + weryfikacja" required />
-            </div>
-          </div>
-
-          <div class="field">
-            <label for="message">Wiadomość</label>
-            <div class="textarea-wrap">
-              <textarea id="message" name="message" placeholder="Opisz serwer, funkcje, kanały/role i ewentualny termin." required></textarea>
+            <div class="field">
+              <label for="message">Wiadomość</label>
+              <textarea id="message" name="message" required></textarea>
               <div class="char-row">
-                <span class="char-hint">Pro tip: im więcej konkretów, tym mniej ping-ponga.</span>
+                <span>Limit wiadomości: 4000 znaków</span>
                 <span id="charCount" class="char-count">0/4000</span>
               </div>
             </div>
-          </div>
 
-          <!-- honeypot: boty lubią to wypełniać -->
-          <input id="website" name="website" type="text" autocomplete="off" tabindex="-1" class="hp" />
+            <input id="website" name="website" type="text" autocomplete="off" tabindex="-1" class="hp" />
 
-          <button class="btn btn-primary btn-wide" type="submit">
-            <i class="fa-solid fa-paper-plane"></i>
-            Wyślij wiadomość
-          </button>
-
-          <div id="status" class="status status-box" aria-live="polite"></div>
-          <div class="privacy-note">
-            Wysyłając formularz, wysyłasz wiadomość do nas na Discord. Nie zapisujemy tego w żadnej „wielkiej bazie zła”.
-          </div>
-        </form>
-      </div>
-    </div>
-  </section>
-
-  <!-- FOOTER -->
-  <footer>
-    <div class="footer-inner">
-      <div class="foot-col">
-        <h4>WH!TEcode™</h4>
-        <p>Profesjonalne boty Discord — szybko, solidnie, estetycznie.</p>
-      </div>
-
-      <div class="foot-col">
-        <h4>Informacje</h4>
-        <p>
-          <strong>Piotrek _.ligcodes_0_</strong><br/>
-          Dortmund, Niemcy<br/>
-          <em>Działalność nierejestrowana</em><br/><br/>
-          E-mail: <a href="mailto:lightningcodes001@gmail.com">lightningcodes001@gmail.com</a>
-        </p>
-      </div>
-
-      <div class="foot-col">
-        <h4>Linki</h4>
-        <div class="foot-links">
-          <a href="#regulamin">📄 Regulamin usług (TOS)</a>
-          <a href="#opinie">⭐ Opinie klientów</a>
-          <a href="https://discord.gg/WDjKTnmD4U" target="_blank" rel="noreferrer">💬 Serwer Discord</a>
+            <button class="btn btn-primary btn-wide" type="submit"><i class="fa-solid fa-paper-plane"></i> Wyślij wiadomość</button>
+            <div id="status" class="status status-box" aria-live="polite"></div>
+          </form>
         </div>
       </div>
-    </div>
+    </section>
+  </main>
 
-    <div class="footer-bottom">
-      &copy; 2025-2026 WH!TEcode™. Wszystkie prawa zastrzeżone.
+  <footer>
+    <div class="footer-inner footer-grid">
+      <div class="foot-col footer-brand">
+        <h4>WH!TEcode™</h4>
+        <p>Profesjonalne boty Discord: od pomysłu do wdrożenia.</p>
+        <div class="footer-badges">
+          <span><i class="fa-solid fa-shield"></i> Bezpieczny kod</span>
+          <span><i class="fa-solid fa-bolt"></i> Szybka realizacja</span>
+        </div>
+      </div>
+      <div class="foot-col">
+        <h4>Dane kontaktowe</h4>
+        <p>Piotrek (_.ligcodes_0_)<br/>Dortmund, Niemcy<br/>E-mail: <a href="mailto:lightningcodes001@gmail.com">lightningcodes001@gmail.com</a></p>
+      </div>
+      <div class="foot-col foot-links">
+        <h4>Nawigacja</h4>
+        <a href="#oferta">Oferta</a>
+        <a href="#moduly">Moduły</a>
+        <a href="#kontakt">Kontakt</a>
+      </div>
+      <div class="foot-col foot-links">
+        <h4>Szybki kontakt</h4>
+        <a href="https://discord.gg/WDjKTnmD4U" target="_blank" rel="noreferrer"><i class="fa-brands fa-discord"></i> Discord</a>
+        <a href="mailto:lightningcodes001@gmail.com"><i class="fa-solid fa-envelope"></i> E-mail</a>
+      </div>
     </div>
+    <div class="footer-bottom">&copy; 2025-2026 WH!TEcode™. Wszelkie prawa zastrzeżone.</div>
   </footer>
-<script>
-  const API_CONTACT = "/contact"; // Pages Function endpoint
 
-  const form = document.getElementById("contactForm");
-  const statusEl = document.getElementById("status");
-  const messageEl = document.getElementById("message");
-  const charCountEl = document.getElementById("charCount");
-  const hpEl = document.getElementById("website");
+    <script src="script.js" defer></script>
 
-  function setStatus(msg, type){
-    statusEl.textContent = msg;
-    statusEl.className = "status status-box " + (type || "");
-  }
-
-  function updateCount(){
-    const len = (messageEl.value || "").length;
-    if (charCountEl) charCountEl.textContent = `${len}/4000`;
-  }
-
-  updateCount();
-  messageEl.addEventListener("input", updateCount);
-
-  form.addEventListener("submit", async (e) => {
-    e.preventDefault();
-
-    // honeypot (dla botów): jeśli coś tu jest, udajemy sukces
-    if ((hpEl?.value || "").trim().length > 0) {
-      form.reset();
-      updateCount();
-      setStatus("Wysłane ✅", "ok");
-      return;
-    }
-
-    const name = document.getElementById("name").value.trim();
-    const contact = document.getElementById("contact").value.trim();
-    const topic = document.getElementById("topic").value.trim();
-    const message = messageEl.value.trim();
-
-    if (!name || !contact || !topic || !message) {
-      setStatus("Uzupełnij wszystkie pola.", "err");
-      return;
-    }
-
-    if (message.length > 4000) {
-      setStatus("Wiadomość jest za długa (max 4000 znaków).", "err");
-      return;
-    }
-
-    setStatus("Wysyłam…", "");
-
-    // hpWebsite zostaje dla zgodności z backendem (jeśli go używasz)
-    const payload = { name, contact, topic, message, hpWebsite: "" };
-
-    try {
-      const res = await fetch(API_CONTACT, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-
-      const out = await res.json().catch(() => ({}));
-
-      if (!res.ok || !out.ok) {
-        setStatus(out.error || "Nie udało się wysłać. Spróbuj ponownie.", "err");
-        return;
-      }
-
-      form.reset();
-      updateCount();
-      setStatus("Wysłane ✅", "ok");
-    } catch (err) {
-      setStatus("Błąd sieci. Spróbuj ponownie.", "err");
-    }
-  });
-</script>
 </body>
-
 </html>
