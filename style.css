@@ -366,6 +366,34 @@ h1 span { color: var(--accent-strong); text-shadow: 0 0 22px rgba(228, 235, 255,
 }
 
 .panel { padding: 24px; }
+
+.auth-box {
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,0.03);
+  border-radius: 14px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.auth-info {
+  color: var(--muted);
+  font-size: 0.93rem;
+  margin-bottom: 10px;
+}
+
+.auth-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+button:disabled,
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
 .panel-sub { color: var(--muted); margin-bottom: 12px; }
 
 .contact-form,
