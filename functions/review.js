@@ -1,15 +1,5 @@
 import { readSessionUser } from "./_lib/auth.js";
-import {
-  createReviewId,
-  getProfile,
-  normalizeAccountFromSession,
-  normalizeAvatarFromSession,
-  normalizeDisplayFromSession,
-  saveProfile,
-  saveReview
-} from "./_lib/db.js";
-
-const DEFAULT_PROFILE = "whitecode";
+import { normalizeDisplayFromSession, saveReview } from "./_lib/db.js";
 
 export async function onRequestPost({ request, env }) {
   try {
@@ -26,46 +16,21 @@ export async function onRequestPost({ request, env }) {
 
     const data = await request.json();
     const review = String(data.review || "").trim();
-    const stars = Number(data.rating || 0);
-    const profileSlug = String(data.profileSlug || env.DEFAULT_PROFILE_SLUG || DEFAULT_PROFILE).trim().toLowerCase();
+    const rating = Number(data.rating || 0);
 
     if (!review) return json({ ok: false, error: "Wpisz treść opinii." }, 400);
     if (review.length > 1200) return json({ ok: false, error: "Opinia jest za długa (max 1200)." }, 400);
-    if (!Number.isInteger(stars) || stars < 1 || stars > 5) return json({ ok: false, error: "Wybierz ocenę od 1 do 5." }, 400);
-
-    let profile = await getProfile(env, profileSlug);
-    if (!profile) {
-      await saveProfile(env, {
-        slug: profileSlug,
-        owner_account: "system",
-        owner_display: "System",
-        owner_avatar: null,
-        owner_bio: "Profil systemowy dla opinii landing page.",
-        created_at: new Date().toISOString(),
-        updated_at: null
-      });
-      profile = await getProfile(env, profileSlug);
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+      return json({ ok: false, error: "Wybierz ocenę od 1 do 5." }, 400);
     }
 
-    const reviewerAccount = normalizeAccountFromSession(user);
-    if (profile.owner_account === reviewerAccount) {
-      return json({ ok: false, error: "Właściciel profilu nie może wystawić opinii sam sobie." }, 403);
-    }
-
-    const ok = await saveReview(env, {
-      id: createReviewId(),
-      profile_slug: profileSlug,
-      rating: fromStarsToRating(stars),
-      reason: review,
-      reviewer_account: reviewerAccount,
-      reviewer_display: normalizeDisplayFromSession(user),
-      reviewer_avatar: normalizeAvatarFromSession(user),
-      created_at: new Date().toISOString()
+    await saveReview(env, {
+      created_at: new Date().toISOString(),
+      discord_user_id: String(user.sub || ""),
+      discord_user_display: normalizeDisplayFromSession(user),
+      review,
+      rating
     });
-
-    if (!ok) {
-      return json({ ok: false, error: "Nie udało się zapisać opinii." }, 500);
-    }
 
     return json({
       ok: true,
@@ -74,18 +39,12 @@ export async function onRequestPost({ request, env }) {
         discord_user_id: String(user.sub || ""),
         discord_user_display: normalizeDisplayFromSession(user),
         review,
-        rating: stars
+        rating
       }
     });
-  } catch (error) {
+  } catch {
     return json({ ok: false, error: "Błąd serwera podczas dodawania opinii." }, 500);
   }
-}
-
-function fromStarsToRating(stars) {
-  if (stars <= 2) return "scam";
-  if (stars === 3) return "sold";
-  return "legit";
 }
 
 function validateOrigin(request) {

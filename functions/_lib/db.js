@@ -1,69 +1,20 @@
-const DB_FILE_CACHE = globalThis.__WC_DB_FILE_CACHE__ || (globalThis.__WC_DB_FILE_CACHE__ = new Map());
 const MEM_DB = globalThis.__WC_MEM_DB__ || (globalThis.__WC_MEM_DB__ = createEmptyState());
+const DB_FILE_CACHE = globalThis.__WC_DB_FILE_CACHE__ || (globalThis.__WC_DB_FILE_CACHE__ = new Map());
 const SCHEMA_READY = new WeakSet();
-
-const CREATE_PROFILES_SQL = `
-CREATE TABLE IF NOT EXISTS profiles (
-  slug TEXT PRIMARY KEY,
-  owner_account TEXT NOT NULL UNIQUE,
-  owner_display TEXT,
-  owner_avatar TEXT,
-  owner_bio TEXT NOT NULL DEFAULT '',
-  created_at TEXT NOT NULL,
-  updated_at TEXT
-)`;
 
 const CREATE_REVIEWS_SQL = `
 CREATE TABLE IF NOT EXISTS reviews (
-  id TEXT PRIMARY KEY,
-  profile_slug TEXT NOT NULL,
-  rating TEXT NOT NULL,
-  reason TEXT NOT NULL,
-  reviewer_account TEXT NOT NULL,
-  reviewer_display TEXT,
-  reviewer_avatar TEXT,
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
   created_at TEXT NOT NULL,
-  updated_at TEXT,
-  UNIQUE(profile_slug, reviewer_account)
+  discord_user_id TEXT NOT NULL,
+  discord_user_display TEXT NOT NULL,
+  review TEXT NOT NULL,
+  rating INTEGER NOT NULL
 )`;
 
-const CREATE_REPORTS_SQL = `
-CREATE TABLE IF NOT EXISTS reports (
-  id TEXT PRIMARY KEY,
-  profile_slug TEXT NOT NULL,
-  review_id TEXT NOT NULL,
-  reported_by TEXT NOT NULL,
-  reason TEXT,
-  status TEXT NOT NULL DEFAULT 'open',
-  created_at TEXT NOT NULL,
-  updated_at TEXT
-)`;
-
-const CREATE_BLOCKED_SQL = `
-CREATE TABLE IF NOT EXISTS blocked_accounts (
-  account TEXT PRIMARY KEY,
-  blocked INTEGER NOT NULL DEFAULT 1,
-  reason TEXT,
-  created_at TEXT NOT NULL,
-  updated_at TEXT
-)`;
-
-const CREATE_MESSAGE_BLOCKS_SQL = `
-CREATE TABLE IF NOT EXISTS message_blocks (
-  id TEXT PRIMARY KEY,
-  profile_slug TEXT NOT NULL,
-  account TEXT NOT NULL,
-  reason TEXT,
-  created_at TEXT NOT NULL,
-  UNIQUE(profile_slug, account)
-)`;
-
-const INDEXES = [
-  `CREATE INDEX IF NOT EXISTS idx_reviews_profile_created ON reviews(profile_slug, created_at DESC)`,
-  `CREATE INDEX IF NOT EXISTS idx_reviews_reviewer ON reviews(reviewer_account)`,
-  `CREATE INDEX IF NOT EXISTS idx_reports_profile_status ON reports(profile_slug, status, created_at DESC)`,
-  `CREATE INDEX IF NOT EXISTS idx_reports_status ON reports(status, created_at DESC)`
-];
+const CREATE_REVIEWS_CREATED_AT_INDEX = `
+CREATE INDEX IF NOT EXISTS idx_reviews_created_at ON reviews(created_at DESC)
+`;
 
 export async function resolveD1DatabaseForUsage(env) {
   const db = env?.DB && typeof env.DB.prepare === "function" ? env.DB : null;
@@ -73,12 +24,8 @@ export async function resolveD1DatabaseForUsage(env) {
 
 export async function ensureSchema(db) {
   if (!db || SCHEMA_READY.has(db)) return;
-  await runSql(db, CREATE_PROFILES_SQL);
   await runSql(db, CREATE_REVIEWS_SQL);
-  await runSql(db, CREATE_REPORTS_SQL);
-  await runSql(db, CREATE_BLOCKED_SQL);
-  await runSql(db, CREATE_MESSAGE_BLOCKS_SQL);
-  for (const sql of INDEXES) await runSql(db, sql);
+  await runSql(db, CREATE_REVIEWS_CREATED_AT_INDEX);
   SCHEMA_READY.add(db);
 }
 
@@ -90,338 +37,176 @@ export async function ensureStorage(env) {
   }
 
   const fileStore = await tryLoadFileStore(env);
-  if (fileStore) {
-    return { mode: "file", state: fileStore.state, persist: fileStore.persist, info };
-  }
+  if (fileStore) return { mode: "file", state: fileStore.state, persist: fileStore.persist, info };
 
   return { mode: "memory", state: MEM_DB, persist: async () => {}, info };
 }
 
-export async function saveProfile(env, profile) {
+export async function saveReview(env, row) {
   const store = await ensureStorage(env);
+  const normalized = normalizeReviewRow(row);
+
   if (store.mode === "d1") {
-    const now = isoNow();
     await store.db.prepare(`
-      INSERT INTO profiles (slug, owner_account, owner_display, owner_avatar, owner_bio, created_at, updated_at)
-      VALUES (?1, ?2, ?3, ?4, ?5, ?6, NULL)
-      ON CONFLICT(slug) DO UPDATE SET
-        owner_display = excluded.owner_display,
-        owner_avatar = excluded.owner_avatar,
-        owner_bio = excluded.owner_bio,
-        updated_at = ?7
+      INSERT INTO reviews (created_at, discord_user_id, discord_user_display, review, rating)
+      VALUES (?1, ?2, ?3, ?4, ?5)
     `).bind(
-      profile.slug,
-      profile.owner_account,
-      profile.owner_display || null,
-      profile.owner_avatar || null,
-      profile.owner_bio || "",
-      profile.created_at || now,
-      now
-    ).run();
-    return profile;
-  }
-
-  const state = store.state;
-  const idx = state.profiles.findIndex((p) => p.slug === profile.slug);
-  if (idx >= 0) {
-    state.profiles[idx] = { ...state.profiles[idx], ...profile, updated_at: isoNow() };
-  } else {
-    state.profiles.push({ ...profile, created_at: profile.created_at || isoNow(), updated_at: null });
-  }
-  await store.persist();
-  return profile;
-}
-
-export async function getProfile(env, slug) {
-  const store = await ensureStorage(env);
-  if (store.mode === "d1") {
-    const profile = await store.db.prepare(`SELECT * FROM profiles WHERE slug = ?1 LIMIT 1`).bind(slug).first();
-    if (!profile) return null;
-    const reviews = await store.db.prepare(`
-      SELECT id, profile_slug, rating, reason, reviewer_account, reviewer_display, reviewer_avatar, created_at, updated_at
-      FROM reviews WHERE profile_slug = ?1 ORDER BY created_at DESC LIMIT 200
-    `).bind(slug).all();
-    const reports = await store.db.prepare(`
-      SELECT id, profile_slug, review_id, reported_by, reason, status, created_at, updated_at
-      FROM reports WHERE profile_slug = ?1 ORDER BY created_at DESC LIMIT 200
-    `).bind(slug).all();
-    return {
-      ...profile,
-      reviews: rows(reviews),
-      reports: rows(reports)
-    };
-  }
-
-  const profile = store.state.profiles.find((p) => p.slug === slug);
-  if (!profile) return null;
-  return {
-    ...profile,
-    reviews: store.state.reviews.filter((r) => r.profile_slug === slug).sort(sortByCreatedDesc),
-    reports: store.state.reports.filter((r) => r.profile_slug === slug).sort(sortByCreatedDesc)
-  };
-}
-
-export async function getProfileByOwner(env, ownerAccount) {
-  const store = await ensureStorage(env);
-  if (store.mode === "d1") {
-    const row = await store.db.prepare(`SELECT slug FROM profiles WHERE owner_account = ?1 LIMIT 1`).bind(ownerAccount).first();
-    return row?.slug || null;
-  }
-  const row = store.state.profiles.find((p) => p.owner_account === ownerAccount);
-  return row?.slug || null;
-}
-
-export async function deleteProfile(env, slug) {
-  const store = await ensureStorage(env);
-  if (store.mode === "d1") {
-    await store.db.prepare(`DELETE FROM reports WHERE profile_slug = ?1`).bind(slug).run();
-    await store.db.prepare(`DELETE FROM reviews WHERE profile_slug = ?1`).bind(slug).run();
-    await store.db.prepare(`DELETE FROM message_blocks WHERE profile_slug = ?1`).bind(slug).run();
-    const res = await store.db.prepare(`DELETE FROM profiles WHERE slug = ?1`).bind(slug).run();
-    return Number(res?.meta?.changes || 0) > 0;
-  }
-
-  const before = store.state.profiles.length;
-  store.state.profiles = store.state.profiles.filter((p) => p.slug !== slug);
-  store.state.reviews = store.state.reviews.filter((r) => r.profile_slug !== slug);
-  store.state.reports = store.state.reports.filter((r) => r.profile_slug !== slug);
-  store.state.message_blocks = store.state.message_blocks.filter((r) => r.profile_slug !== slug);
-  await store.persist();
-  return store.state.profiles.length !== before;
-}
-
-export async function updateProfileSettings(env, slug, { nextSlug, ownerBio }) {
-  const store = await ensureStorage(env);
-  if (store.mode === "d1") {
-    const duplicate = await store.db.prepare(`SELECT slug FROM profiles WHERE slug = ?1 LIMIT 1`).bind(nextSlug).first();
-    if (duplicate && duplicate.slug !== slug) return { ok: false, error: "slug_taken" };
-
-    await store.db.prepare(`
-      UPDATE profiles
-      SET slug = ?1, owner_bio = ?2, updated_at = ?3
-      WHERE slug = ?4
-    `).bind(nextSlug, ownerBio || "", isoNow(), slug).run();
-
-    if (nextSlug !== slug) {
-      await store.db.prepare(`UPDATE reviews SET profile_slug = ?1 WHERE profile_slug = ?2`).bind(nextSlug, slug).run();
-      await store.db.prepare(`UPDATE reports SET profile_slug = ?1 WHERE profile_slug = ?2`).bind(nextSlug, slug).run();
-      await store.db.prepare(`UPDATE message_blocks SET profile_slug = ?1 WHERE profile_slug = ?2`).bind(nextSlug, slug).run();
-    }
-
-    return { ok: true, slug: nextSlug };
-  }
-
-  const profile = store.state.profiles.find((p) => p.slug === slug);
-  if (!profile) return { ok: false, error: "profile_not_found" };
-  const duplicate = store.state.profiles.find((p) => p.slug === nextSlug && p.slug !== slug);
-  if (duplicate) return { ok: false, error: "slug_taken" };
-
-  profile.slug = nextSlug;
-  profile.owner_bio = ownerBio || "";
-  profile.updated_at = isoNow();
-  if (nextSlug !== slug) {
-    for (const r of store.state.reviews) if (r.profile_slug === slug) r.profile_slug = nextSlug;
-    for (const r of store.state.reports) if (r.profile_slug === slug) r.profile_slug = nextSlug;
-    for (const r of store.state.message_blocks) if (r.profile_slug === slug) r.profile_slug = nextSlug;
-  }
-  await store.persist();
-  return { ok: true, slug: nextSlug };
-}
-
-export async function saveReview(env, reviewRow) {
-  const store = await ensureStorage(env);
-  if (store.mode === "d1") {
-    const now = isoNow();
-    await store.db.prepare(`
-      INSERT INTO reviews (
-        id, profile_slug, rating, reason, reviewer_account, reviewer_display, reviewer_avatar, created_at, updated_at
-      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, NULL)
-      ON CONFLICT(profile_slug, reviewer_account) DO UPDATE SET
-        rating = excluded.rating,
-        reason = excluded.reason,
-        reviewer_display = excluded.reviewer_display,
-        reviewer_avatar = excluded.reviewer_avatar,
-        updated_at = ?9
-    `).bind(
-      reviewRow.id,
-      reviewRow.profile_slug,
-      reviewRow.rating,
-      reviewRow.reason,
-      reviewRow.reviewer_account,
-      reviewRow.reviewer_display || null,
-      reviewRow.reviewer_avatar || null,
-      reviewRow.created_at || now,
-      now
+      normalized.created_at,
+      normalized.discord_user_id,
+      normalized.discord_user_display,
+      normalized.review,
+      normalized.rating
     ).run();
     return true;
   }
 
-  const idx = store.state.reviews.findIndex((r) => r.profile_slug === reviewRow.profile_slug && r.reviewer_account === reviewRow.reviewer_account);
-  if (idx >= 0) {
-    store.state.reviews[idx] = { ...store.state.reviews[idx], ...reviewRow, updated_at: isoNow() };
-  } else {
-    store.state.reviews.push({ ...reviewRow, created_at: reviewRow.created_at || isoNow(), updated_at: null });
-  }
+  store.state.reviews.push({ id: normalized.id || createReviewId(), ...normalized });
   await store.persist();
   return true;
 }
 
-
-
-export async function deleteReviewById(env, profileSlug, reviewId) {
+export async function listRecentReviews(env, limit = 24) {
+  const n = Math.max(1, Math.min(100, Number(limit) || 24));
   const store = await ensureStorage(env);
+
   if (store.mode === "d1") {
-    await store.db.prepare(`DELETE FROM reviews WHERE profile_slug = ?1 AND id = ?2`).bind(profileSlug, reviewId).run();
-    return true;
+    const out = await store.db.prepare(`
+      SELECT id, created_at, discord_user_id, discord_user_display, review, rating
+      FROM reviews
+      ORDER BY id DESC
+      LIMIT ?1
+    `).bind(n).all();
+    return rows(out);
   }
+
+  return [...store.state.reviews]
+    .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")))
+    .slice(0, n);
+}
+
+export async function deleteReviewById(env, _profileSlug, reviewId) {
+  const store = await ensureStorage(env);
+
+  if (store.mode === "d1") {
+    const id = Number(reviewId);
+    if (!Number.isFinite(id)) return false;
+    const res = await store.db.prepare(`DELETE FROM reviews WHERE id = ?1`).bind(id).run();
+    return Number(res?.meta?.changes || 0) > 0;
+  }
+
   const before = store.state.reviews.length;
-  store.state.reviews = store.state.reviews.filter((r) => !(r.profile_slug === profileSlug && r.id === reviewId));
+  store.state.reviews = store.state.reviews.filter((r) => String(r.id) !== String(reviewId));
   await store.persist();
   return store.state.reviews.length !== before;
 }
 
-export async function createReport(env, reportRow) {
-  const store = await ensureStorage(env);
-  if (store.mode === "d1") {
-    await store.db.prepare(`
-      INSERT INTO reports (id, profile_slug, review_id, reported_by, reason, status, created_at, updated_at)
-      VALUES (?1, ?2, ?3, ?4, ?5, 'open', ?6, NULL)
-    `).bind(
-      reportRow.id,
-      reportRow.profile_slug,
-      reportRow.review_id,
-      reportRow.reported_by,
-      reportRow.reason || null,
-      reportRow.created_at || isoNow()
-    ).run();
-    return true;
-  }
+// ---- Compatibility helpers for previously added profile/admin endpoints ----
 
-  store.state.reports.push({
-    ...reportRow,
-    reason: reportRow.reason || null,
-    status: "open",
-    created_at: reportRow.created_at || isoNow(),
-    updated_at: null
-  });
-  await store.persist();
-  return true;
+export async function saveProfile(_env, profile) {
+  const idx = MEM_DB.profiles.findIndex((p) => p.slug === profile.slug);
+  if (idx >= 0) MEM_DB.profiles[idx] = { ...MEM_DB.profiles[idx], ...profile };
+  else MEM_DB.profiles.push({ ...profile });
+  return profile;
 }
 
-export async function resolveReport(env, reportId) {
-  const store = await ensureStorage(env);
-  if (store.mode === "d1") {
-    await store.db.prepare(`UPDATE reports SET status = 'closed', updated_at = ?1 WHERE id = ?2`).bind(isoNow(), reportId).run();
-    return true;
-  }
-  const row = store.state.reports.find((r) => r.id === reportId);
-  if (!row) return false;
-  row.status = "closed";
-  row.updated_at = isoNow();
-  await store.persist();
-  return true;
-}
-
-export async function listOpenReportsGlobal(env) {
-  const store = await ensureStorage(env);
-  if (store.mode === "d1") {
-    const out = await store.db.prepare(`
-      SELECT r.id AS report_id, r.profile_slug, r.review_id, r.reported_by, r.reason, r.created_at,
-             rv.reviewer_account, rv.reviewer_display
-      FROM reports r
-      LEFT JOIN reviews rv ON rv.id = r.review_id
-      WHERE r.status = 'open'
-      ORDER BY r.created_at DESC
-      LIMIT 200
-    `).all();
-    return rows(out).map((r) => ({
-      reportId: r.report_id,
-      profileSlug: r.profile_slug,
-      reviewId: r.review_id,
-      reportedBy: r.reported_by,
-      reason: r.reason,
-      createdAt: r.created_at,
-      reviewerAccount: r.reviewer_account,
-      reviewerDisplay: r.reviewer_display,
-      blocked: false
+export async function getProfile(_env, slug) {
+  const reviews = MEM_DB.reviews
+    .filter((r) => String(r.profile_slug || "") === String(slug))
+    .map((r) => ({
+      id: r.id,
+      profile_slug: r.profile_slug,
+      rating: r.rating_legacy || fromStarsToLegacy(r.rating),
+      reason: r.review,
+      reviewer_account: r.reviewer_account || `dc_${r.discord_user_id}`,
+      reviewer_display: r.discord_user_display,
+      reviewer_avatar: r.reviewer_avatar || null,
+      created_at: r.created_at,
+      updated_at: null
     }));
-  }
 
-  return store.state.reports
-    .filter((r) => r.status === "open")
-    .sort(sortByCreatedDesc)
-    .map((r) => {
-      const review = store.state.reviews.find((x) => x.id === r.review_id);
-      return {
-        reportId: r.id,
-        profileSlug: r.profile_slug,
-        reviewId: r.review_id,
-        reportedBy: r.reported_by,
-        reason: r.reason,
-        createdAt: r.created_at,
-        reviewerAccount: review?.reviewer_account || null,
-        reviewerDisplay: review?.reviewer_display || null,
-        blocked: false
-      };
-    });
-}
-
-export async function getAdminStats(env) {
-  const store = await ensureStorage(env);
-  if (store.mode === "d1") {
-    const [profiles, owners, reports, blocked] = await Promise.all([
-      store.db.prepare(`SELECT COUNT(*) AS c FROM profiles`).first(),
-      store.db.prepare(`SELECT COUNT(DISTINCT owner_account) AS c FROM profiles`).first(),
-      store.db.prepare(`SELECT COUNT(*) AS c FROM reports WHERE status = 'open'`).first(),
-      store.db.prepare(`SELECT COUNT(*) AS c FROM blocked_accounts WHERE blocked = 1`).first()
-    ]);
-    return {
-      profilesCount: Number(profiles?.c || 0),
-      ownersCount: Number(owners?.c || 0),
-      openReportsCount: Number(reports?.c || 0),
-      blockedAccountsCount: Number(blocked?.c || 0)
-    };
-  }
+  const profile = MEM_DB.profiles.find((p) => p.slug === slug);
+  if (!profile && !reviews.length) return null;
 
   return {
-    profilesCount: store.state.profiles.length,
-    ownersCount: new Set(store.state.profiles.map((p) => p.owner_account)).size,
-    openReportsCount: store.state.reports.filter((r) => r.status === "open").length,
-    blockedAccountsCount: store.state.blocked_accounts.filter((x) => x.blocked).length
+    slug,
+    owner_account: profile?.owner_account || "system",
+    owner_display: profile?.owner_display || "System",
+    owner_avatar: profile?.owner_avatar || null,
+    owner_bio: profile?.owner_bio || "",
+    reviews,
+    reports: MEM_DB.reports.filter((r) => r.profile_slug === slug)
   };
 }
 
-export async function setBlockedAccount(env, { account, blocked, reason }) {
-  const store = await ensureStorage(env);
-  const blockFlag = blocked ? 1 : 0;
-  if (store.mode === "d1") {
-    await store.db.prepare(`
-      INSERT INTO blocked_accounts (account, blocked, reason, created_at, updated_at)
-      VALUES (?1, ?2, ?3, ?4, NULL)
-      ON CONFLICT(account) DO UPDATE SET blocked = ?2, reason = ?3, updated_at = ?5
-    `).bind(account, blockFlag, reason || null, isoNow(), isoNow()).run();
-    return true;
-  }
+export async function getProfileByOwner(_env, ownerAccount) {
+  return MEM_DB.profiles.find((p) => p.owner_account === ownerAccount)?.slug || null;
+}
 
-  const row = store.state.blocked_accounts.find((x) => x.account === account);
-  if (row) {
-    row.blocked = blockFlag;
-    row.reason = reason || null;
-    row.updated_at = isoNow();
-  } else {
-    store.state.blocked_accounts.push({ account, blocked: blockFlag, reason: reason || null, created_at: isoNow(), updated_at: null });
-  }
-  await store.persist();
+export async function deleteProfile(_env, slug) {
+  MEM_DB.profiles = MEM_DB.profiles.filter((p) => p.slug !== slug);
+  MEM_DB.reviews = MEM_DB.reviews.filter((r) => r.profile_slug !== slug);
+  MEM_DB.reports = MEM_DB.reports.filter((r) => r.profile_slug !== slug);
   return true;
 }
 
-export async function isBlockedAccount(env, account) {
-  const store = await ensureStorage(env);
-  if (store.mode === "d1") {
-    const row = await store.db.prepare(`SELECT blocked FROM blocked_accounts WHERE account = ?1 LIMIT 1`).bind(account).first();
-    return Number(row?.blocked || 0) === 1;
+export async function updateProfileSettings(_env, slug, { nextSlug, ownerBio }) {
+  const profile = MEM_DB.profiles.find((p) => p.slug === slug);
+  if (!profile) return { ok: false, error: "profile_not_found" };
+  const duplicate = MEM_DB.profiles.find((p) => p.slug === nextSlug && p.slug !== slug);
+  if (duplicate) return { ok: false, error: "slug_taken" };
+  profile.slug = nextSlug;
+  profile.owner_bio = ownerBio || "";
+  return { ok: true, slug: nextSlug };
+}
+
+export async function createReport(_env, reportRow) {
+  MEM_DB.reports.push({ ...reportRow, status: "open" });
+  return true;
+}
+
+export async function resolveReport(_env, reportId) {
+  const row = MEM_DB.reports.find((r) => String(r.id) === String(reportId));
+  if (!row) return false;
+  row.status = "closed";
+  return true;
+}
+
+export async function listOpenReportsGlobal() {
+  return MEM_DB.reports.filter((r) => r.status === "open").map((r) => ({
+    reportId: r.id,
+    profileSlug: r.profile_slug,
+    reviewId: r.review_id,
+    reportedBy: r.reported_by,
+    reason: r.reason,
+    createdAt: r.created_at,
+    reviewerAccount: null,
+    reviewerDisplay: null,
+    blocked: false
+  }));
+}
+
+export async function getAdminStats() {
+  return {
+    profilesCount: MEM_DB.profiles.length,
+    ownersCount: new Set(MEM_DB.profiles.map((p) => p.owner_account)).size,
+    openReportsCount: MEM_DB.reports.filter((r) => r.status === "open").length,
+    blockedAccountsCount: MEM_DB.blocked_accounts.filter((b) => b.blocked).length
+  };
+}
+
+export async function setBlockedAccount(_env, { account, blocked, reason }) {
+  const row = MEM_DB.blocked_accounts.find((b) => b.account === account);
+  if (row) {
+    row.blocked = blocked ? 1 : 0;
+    row.reason = reason || null;
+  } else {
+    MEM_DB.blocked_accounts.push({ account, blocked: blocked ? 1 : 0, reason: reason || null });
   }
-  const row = store.state.blocked_accounts.find((x) => x.account === account);
+  return true;
+}
+
+export async function isBlockedAccount(_env, account) {
+  const row = MEM_DB.blocked_accounts.find((b) => b.account === account);
   return Number(row?.blocked || 0) === 1;
 }
 
@@ -448,27 +233,44 @@ export function normalizeAvatarFromSession(user) {
   return null;
 }
 
-function createEmptyState() {
+function normalizeReviewRow(row) {
+  const ratingNum = normalizeRating(row.rating);
+  const reviewText = String(row.review ?? row.reason ?? "").trim();
+  const discordId = String(row.discord_user_id || row.reviewer_account || "").replace(/^dc_/, "").trim();
+  const display = String(row.discord_user_display || row.reviewer_display || row.reviewer_account || "Użytkownik").trim();
+
   return {
-    profiles: [],
-    reviews: [],
-    reports: [],
-    blocked_accounts: [],
-    message_blocks: []
+    id: row.id || null,
+    created_at: String(row.created_at || new Date().toISOString()),
+    discord_user_id: discordId || "unknown",
+    discord_user_display: display || "Użytkownik",
+    review: reviewText,
+    rating: ratingNum,
+    profile_slug: row.profile_slug || null,
+    reviewer_account: row.reviewer_account || (discordId ? `dc_${discordId}` : "")
   };
 }
 
-function isoNow() {
-  return new Date().toISOString();
+function normalizeRating(value) {
+  if (Number.isInteger(value)) return Math.max(1, Math.min(5, value));
+  const raw = String(value || "").trim().toLowerCase();
+  if (raw === "scam") return 1;
+  if (raw === "sold") return 3;
+  if (raw === "legit") return 5;
+  const num = Number(raw);
+  if (Number.isInteger(num)) return Math.max(1, Math.min(5, num));
+  return 5;
+}
+
+function fromStarsToLegacy(stars) {
+  const n = normalizeRating(stars);
+  if (n <= 2) return "scam";
+  if (n === 3) return "sold";
+  return "legit";
 }
 
 function rows(allResult) {
-  if (Array.isArray(allResult?.results)) return allResult.results;
-  return [];
-}
-
-function sortByCreatedDesc(a, b) {
-  return String(b.created_at || "").localeCompare(String(a.created_at || ""));
+  return Array.isArray(allResult?.results) ? allResult.results : [];
 }
 
 async function runSql(db, sql) {
@@ -488,6 +290,15 @@ async function runSql(db, sql) {
   throw new Error("Unsupported D1 runtime");
 }
 
+function createEmptyState() {
+  return {
+    profiles: [],
+    reviews: [],
+    reports: [],
+    blocked_accounts: []
+  };
+}
+
 async function tryLoadFileStore(env) {
   if (!isNodeRuntime()) return null;
   let fs;
@@ -503,7 +314,15 @@ async function tryLoadFileStore(env) {
   let state = createEmptyState();
   try {
     const raw = await fs.readFile(file, "utf8");
-    state = normalizeState(JSON.parse(raw));
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object") {
+      state = {
+        profiles: Array.isArray(parsed.profiles) ? parsed.profiles : [],
+        reviews: Array.isArray(parsed.reviews) ? parsed.reviews : [],
+        reports: Array.isArray(parsed.reports) ? parsed.reports : [],
+        blocked_accounts: Array.isArray(parsed.blocked_accounts) ? parsed.blocked_accounts : []
+      };
+    }
   } catch {
     await ensureFile(fs, file, state);
   }
@@ -515,15 +334,6 @@ async function tryLoadFileStore(env) {
   const store = { state, persist };
   DB_FILE_CACHE.set(file, store);
   return store;
-}
-
-function normalizeState(raw) {
-  const base = createEmptyState();
-  if (!raw || typeof raw !== "object") return base;
-  for (const key of Object.keys(base)) {
-    if (Array.isArray(raw[key])) base[key] = raw[key];
-  }
-  return base;
 }
 
 async function ensureFile(fs, file, state) {

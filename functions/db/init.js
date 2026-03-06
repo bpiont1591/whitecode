@@ -1,19 +1,15 @@
-import { ensureStorage, getAdminStats } from "../_lib/db.js";
+import { ensureStorage } from "../_lib/db.js";
 
 export async function onRequestGet({ env }) {
   try {
     const storage = await ensureStorage(env);
-    const stats = await getAdminStats(env);
 
     return json({
       ok: true,
       mode: storage.mode,
       reason: storage.info?.reason || null,
-      checks: {
-        schema: storage.mode === "d1" ? true : null,
-        profilesCount: stats.profilesCount,
-        openReportsCount: stats.openReportsCount
-      }
+      tables: ["reviews"],
+      message: "System opini gotowy. Aktywna tylko tabela reviews."
     });
   } catch (error) {
     return json({

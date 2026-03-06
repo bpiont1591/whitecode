@@ -1,70 +1,38 @@
 # whitecode
 
-Nowy system opini działa w 3 trybach i nie wymaga ręcznego stawiania tabel przy poprawnym `DB` bindingu.
+System opini zapisuje dane tylko do jednej tabeli: `reviews`.
 
-## Tryby danych
+## Gdzie trafiają opinie
 
-1. **Produkcja (Cloudflare D1)**
-   - jeśli dostępne jest `env.DB`, backend automatycznie robi `ensureSchema` (tabele + indeksy),
-   - zapis i odczyt idzie SQL-em.
+Opinie z formularza strony (`POST /review`) są zapisywane do:
+- `reviews(created_at, discord_user_id, discord_user_display, review, rating)`
 
-2. **Fallback/dev (in-memory)**
-   - jeśli `env.DB` nie istnieje i runtime nie ma dostępu do pliku, działa pamięć procesu (`MEM_DB`).
+Odczyt na stronę idzie z:
+- `GET /reviews`
 
-3. **Lokalny Node (trwały plik JSON)**
-   - jeśli brak `env.DB`, ale uruchamiasz w Node, dane zapisują się do `data/profiles-db.json` (lub ścieżki z `LOCAL_DB_FILE`).
+## Tryby działania
 
-## Wymagane sekrety auth/webhook
+1. **Cloudflare D1 (produkcyjnie)**
+   - jeśli jest podpięte `env.DB`, backend automatycznie tworzy tabelę `reviews`.
 
-- `DISCORD_WEBHOOK_URL`
+2. **Fallback lokalny (Node)**
+   - jeśli nie ma `env.DB`, dane idą do pliku `data/profiles-db.json`.
+
+3. **Fallback pamięciowy**
+   - gdy brak D1 i brak dostępu do pliku, działa pamięć procesu (`MEM_DB`).
+
+## Endpoint init
+
+- `GET /db/init` przygotowuje storage i potwierdza, że używana jest tylko tabela `reviews`.
+
+## Wymagane sekrety
+
+- `SESSION_SECRET`
 - `DISCORD_CLIENT_ID`
 - `DISCORD_CLIENT_SECRET`
 - `DISCORD_REDIRECT_URI`
-- `SESSION_SECRET`
+- `DISCORD_WEBHOOK_URL`
 
-## D1 binding
+## SQL (Cloudflare D1)
 
-- ustaw D1 binding jako `DB`.
-- opcjonalnie `DEFAULT_PROFILE_SLUG` dla endpointów `/review` i `/reviews`.
-
-## Tabele tworzone automatycznie
-
-- `profiles`
-- `reviews`
-- `reports`
-- `blocked_accounts`
-- `message_blocks`
-
-Schemat referencyjny: `schema.sql`.
-
-## API (system profili i opinii)
-
-- `GET /api/profile?user=<slug>`
-- `POST /api/profile/create`
-- `POST /api/profile/settings`
-- `POST /api/profile/delete`
-- `GET /api/my-profile`
-- `POST /api/review`
-- `POST /api/report`
-- `POST /api/report/resolve`
-- `GET /api/admin/reports`
-- `GET /api/admin/stats`
-- `POST /api/admin/block`
-- `POST /api/admin/report/action`
-
-## Kompatybilność z dotychczasowym landingiem
-
-- `POST /review` (1-5 gwiazdek)
-- `GET /reviews`
-
-Te endpointy mapują dane do nowego modelu tabeli `reviews`.
-
-## Smoke test (lokalnie)
-
-Uruchom:
-
-```bash
-node tests/smoke-reviews.mjs
-```
-
-Test sprawdza sekwencję: create profile → add review → report → resolve → delete profile → recreate.
+Pełny minimalny schemat jest w `schema.sql`.
