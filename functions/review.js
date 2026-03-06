@@ -107,7 +107,12 @@ export async function onRequestPost({ request, env }) {
     }
 
     try {
-      await ensureSchema(db);
+      try {
+        await ensureSchema(db);
+      } catch {
+        // allow write attempt even when full schema init fails
+      }
+
       await saveReview(db, {
         created_at: createdAt,
         discord_user_id: safe(user.sub),
@@ -118,7 +123,7 @@ export async function onRequestPost({ request, env }) {
         webhook_error: webhookError
       });
     } catch {
-      return json({ ok: false, error: "Nie udało się zapisać opinii do bazy D1. Sprawdź binding, uprawnienia oraz czy tabele mogły zostać utworzone automatycznie." }, 500);
+      return json({ ok: false, error: "Nie udało się zapisać opinii do tabeli reviews w D1." }, 500);
     }
 
     const reviewItem = {
