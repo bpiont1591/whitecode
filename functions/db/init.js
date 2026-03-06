@@ -1,4 +1,4 @@
-import { ensureSchema, resolveD1DatabaseForUsage } from "../_lib/db.js";
+import { deleteReviewById, ensureSchema, resolveD1DatabaseForUsage, saveReview } from "../_lib/db.js";
 
 export async function onRequestGet({ env }) {
   try {
@@ -45,38 +45,46 @@ export async function onRequestGet({ env }) {
 async function runWriteReadDeleteHealthcheck(db) {
   const createdAt = new Date().toISOString();
 
-  const insertRes = await db.prepare(`
-    INSERT INTO reviews (
-      created_at, discord_user_id, discord_user_display,
-      review, rating, webhook_status, webhook_error
-    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
-  `).bind(
-    createdAt,
-    "__healthcheck__",
-    "__healthcheck__",
-    "D1 healthcheck",
-    5,
-    "skipped",
-    null
-  ).run();
+  const insertedId = await saveReview(db, {
+    created_at: createdAt,
+    discord_user_id: "__healthcheck__",
+    discord_user_display: "__healthcheck__",
+    review: "D1 healthcheck",
+    rating: 5,
+    webhook_status: "skipped",
+    webhook_error: null
+  });
 
-  const insertedId = insertRes?.meta?.last_row_id;
   if (!insertedId) {
     throw new Error("d1 healthcheck insert returned empty id");
   }
 
-  const row = await db.prepare(`
-    SELECT id, review, rating, webhook_status
-    FROM reviews
-    WHERE id = ?1
-    LIMIT 1
-  `).bind(insertedId).first();
+  let row = null;
+  try {
+    row = await db.prepare(`
+      SELECT id, review, rating, webhook_status
+      FROM reviews
+      WHERE id = ?1
+      LIMIT 1
+    `).bind(insertedId).first();
+  } catch {
+    // try reviews_v2 below
+  }
+
+  if (!row) {
+    row = await db.prepare(`
+      SELECT id, review, rating, webhook_status
+      FROM reviews_v2
+      WHERE id = ?1
+      LIMIT 1
+    `).bind(insertedId).first();
+  }
 
   if (!row || row.review !== "D1 healthcheck" || Number(row.rating) !== 5 || row.webhook_status !== "skipped") {
     throw new Error("d1 healthcheck read mismatch");
   }
 
-  await db.prepare(`DELETE FROM reviews WHERE id = ?1`).bind(insertedId).run();
+  await deleteReviewById(db, insertedId);
 }
 
 function json(obj, status = 200) {

@@ -28,6 +28,19 @@ const CREATE_REVIEWS_SQL = `
   )
 `;
 
+const CREATE_REVIEWS_V2_SQL = `
+  CREATE TABLE IF NOT EXISTS reviews_v2 (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at TEXT NOT NULL,
+    discord_user_id TEXT NOT NULL,
+    discord_user_display TEXT NOT NULL,
+    review TEXT NOT NULL,
+    rating INTEGER NOT NULL DEFAULT 5,
+    webhook_status TEXT NOT NULL DEFAULT 'pending',
+    webhook_error TEXT
+  )
+`;
+
 const ADD_REVIEWS_RATING_SQL = `ALTER TABLE reviews ADD COLUMN rating INTEGER NOT NULL DEFAULT 5`;
 const ADD_REVIEWS_WEBHOOK_STATUS_SQL = `ALTER TABLE reviews ADD COLUMN webhook_status TEXT NOT NULL DEFAULT 'pending'`;
 const ADD_REVIEWS_WEBHOOK_ERROR_SQL = `ALTER TABLE reviews ADD COLUMN webhook_error TEXT`;
@@ -40,6 +53,7 @@ export async function ensureSchema(db) {
 
   await runSql(db, CREATE_CONTACT_MESSAGES_SQL);
   await runSql(db, CREATE_REVIEWS_SQL);
+  await runSql(db, CREATE_REVIEWS_V2_SQL);
 
   // migration for existing tables without rating column
   try {
@@ -62,7 +76,8 @@ export async function ensureSchema(db) {
 
   const contactOk = await tableExists(db, "contact_messages");
   const reviewsOk = await tableExists(db, "reviews");
-  if (!contactOk || !reviewsOk) {
+  const reviewsV2Ok = await tableExists(db, "reviews_v2");
+  if (!contactOk || !reviewsOk || !reviewsV2Ok) {
     throw new Error("schema verification failed");
   }
 
@@ -136,24 +151,89 @@ export async function saveReview(db, row) {
     // compatibility fallback for legacy tables that may still miss webhook_* columns
     const message = error instanceof Error ? error.message : String(error);
     const mentionsWebhookColumn = /webhook_status|webhook_error|no such column/i.test(message);
-    if (!mentionsWebhookColumn) throw error;
+    const mentionsCoreReviewColumn = /created_at|discord_user_id|discord_user_display|review|rating|no such column/i.test(message);
 
-    const fallbackStmt = db.prepare(`
-      INSERT INTO reviews (
-        created_at, discord_user_id, discord_user_display,
-        review, rating
-      ) VALUES (?1, ?2, ?3, ?4, ?5)
-    `).bind(
-      row.created_at,
-      row.discord_user_id,
-      row.discord_user_display,
-      row.review,
-      row.rating
-    );
+    if (mentionsWebhookColumn) {
+      const fallbackStmt = db.prepare(`
+        INSERT INTO reviews (
+          created_at, discord_user_id, discord_user_display,
+          review, rating
+        ) VALUES (?1, ?2, ?3, ?4, ?5)
+      `).bind(
+        row.created_at,
+        row.discord_user_id,
+        row.discord_user_display,
+        row.review,
+        row.rating
+      );
 
-    const fallbackRes = await fallbackStmt.run();
-    return fallbackRes?.meta?.last_row_id ?? null;
+      const fallbackRes = await fallbackStmt.run();
+      return fallbackRes?.meta?.last_row_id ?? null;
+    }
+
+    if (mentionsCoreReviewColumn) {
+      const v2Stmt = db.prepare(`
+        INSERT INTO reviews_v2 (
+          created_at, discord_user_id, discord_user_display,
+          review, rating, webhook_status, webhook_error
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+      `).bind(
+        row.created_at,
+        row.discord_user_id,
+        row.discord_user_display,
+        row.review,
+        row.rating,
+        row.webhook_status,
+        row.webhook_error ?? null
+      );
+
+      const v2Res = await v2Stmt.run();
+      return v2Res?.meta?.last_row_id ?? null;
+    }
+
+    throw error;
   }
+}
+
+export async function listRecentReviews(db, limit = 24) {
+  if (!db) return [];
+
+  const n = Math.max(1, Math.min(100, Number(limit) || 24));
+
+  try {
+    const out = await db.prepare(`
+      SELECT id, created_at, discord_user_id, discord_user_display, review, rating
+      FROM reviews
+      ORDER BY id DESC
+      LIMIT ?1
+    `).bind(n).all();
+
+    const items = Array.isArray(out?.results) ? out.results : [];
+    if (items.length > 0) return items;
+  } catch {
+    // fallback to reviews_v2 below
+  }
+
+  const v2Out = await db.prepare(`
+    SELECT id, created_at, discord_user_id, discord_user_display, review, rating
+    FROM reviews_v2
+    ORDER BY id DESC
+    LIMIT ?1
+  `).bind(n).all();
+
+  return Array.isArray(v2Out?.results) ? v2Out.results : [];
+}
+
+export async function deleteReviewById(db, id) {
+  if (!db) return;
+
+  try {
+    await db.prepare(`DELETE FROM reviews WHERE id = ?1`).bind(id).run();
+  } catch {
+    // continue to v2 attempt
+  }
+
+  await db.prepare(`DELETE FROM reviews_v2 WHERE id = ?1`).bind(id).run();
 }
 
 export function resolveD1Database(env) {
