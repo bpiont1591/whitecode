@@ -1,4 +1,5 @@
 import { readSessionUser } from "./_lib/auth.js";
+import { ensureSchema, resolveD1DatabaseForUsage, saveReview } from "./_lib/db.js";
 const RECENT_REVIEWS = globalThis.__WHITECODE_RECENT_REVIEWS__ || (globalThis.__WHITECODE_RECENT_REVIEWS__ = []);
 
 export async function onRequestPost({ request, env }) {
@@ -53,6 +54,8 @@ export async function onRequestPost({ request, env }) {
     }
 
     const webhookUrl = env.REVIEW_WEBHOOK_URL || env.DISCORD_WEBHOOK_URL;
+    const dbInfo = await resolveD1DatabaseForUsage(env);
+    const db = dbInfo.db;
 
     const discordDisplay = formatDiscordUser(user);
     const createdAt = new Date().toISOString();
@@ -106,6 +109,29 @@ export async function onRequestPost({ request, env }) {
       rating
     };
 
+    let persistedToDb = false;
+    if (db) {
+      try {
+        await ensureSchema(db);
+      } catch {
+        // try direct write to reviews even if full schema init failed
+      }
+
+      try {
+        await saveReview(db, {
+          created_at: createdAt,
+          discord_user_id: safe(user.sub),
+          discord_user_display: discordDisplay,
+          review: safe(review),
+          rating,
+          webhook_status: webhookStatus,
+          webhook_error: webhookError
+        });
+        persistedToDb = true;
+      } catch {
+        persistedToDb = false;
+      }
+    }
 
     RECENT_REVIEWS.unshift(reviewItem);
     if (RECENT_REVIEWS.length > 24) RECENT_REVIEWS.length = 24;
@@ -114,8 +140,12 @@ export async function onRequestPost({ request, env }) {
       return json({
         ok: true,
         item: reviewItem,
-        warning: "Nie udało się wysłać opinii na webhook Discord, ale opinia pojawi się na stronie (bez zapisu do bazy)."
+        warning: persistedToDb ? "Nie udało się wysłać opinii na webhook Discord, ale zapisaliśmy ją w bazie danych." : "Nie udało się wysłać opinii na webhook Discord. Opinia pojawi się lokalnie, ale bez trwałego zapisu."
       });
+    }
+
+    if (!persistedToDb) {
+      return json({ ok: true, item: reviewItem, warning: "Opinia dodana, ale nie udało się zapisać jej trwale w D1." });
     }
 
     return json({ ok: true, item: reviewItem });

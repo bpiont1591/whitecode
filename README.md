@@ -8,6 +8,7 @@ Aby formularz działał tylko po logowaniu Discord OAuth i wysyłał dane użytk
 - `DISCORD_CLIENT_SECRET` – OAuth2 Client Secret aplikacji Discord
 - `DISCORD_REDIRECT_URI` – np. `https://whitecode.pl/auth/discord/callback`
 - `SESSION_SECRET` – długi losowy sekret do podpisywania sesji cookie
+- `D1_BINDING_NAME` – *(opcjonalnie)* nazwa bindingu D1, jeśli nie używasz standardowej nazwy `DB`
 
 ## Endpointy auth
 - `GET /auth/discord/start`
@@ -15,6 +16,7 @@ Aby formularz działał tylko po logowaniu Discord OAuth i wysyłał dane użytk
 - `GET /auth/me`
 - `POST /auth/logout`
 - `GET /reviews`
+- `GET /db/init`
 
 ## Ustawienia Discord OAuth
 W panelu Discord Developer Portal:
@@ -42,13 +44,13 @@ Opcjonalnie możesz ustawić osobny webhook dla opinii:
 - `REVIEW_WEBHOOK_URL` (fallback: `DISCORD_WEBHOOK_URL`).
 
 
-## Opinie bez bazy danych (tryb uproszczony)
-Opinie są dodawane bezpośrednio przez API `/review` i trzymane w pamięci runtime (`/reviews`) bez zapisu do D1.
+## Trwałość opinii (zalecane D1)
+Opinie są zapisywane trwale do D1 (tabela `reviews`).
 
-Uwaga: po restarcie instancji lub nowym deployu lista opinii może się wyzerować.
+Fallback: jeśli D1 jest chwilowo niedostępne, API może tymczasowo pokazać ostatnie opinie z pamięci runtime.
 
 
 ## Oceny opinii i widoczność na stronie
 - Formularz opinii wymaga wyboru oceny 1-5 gwiazdek.
-- Endpoint `POST /review` zwraca opinię i dodaje ją do listy w pamięci runtime.
+- Endpoint `POST /review` zapisuje opinię do D1 (z fallbackiem pamięci runtime przy awarii D1).
 - Endpoint `GET /reviews` zwraca najnowsze opinie, które są renderowane na stronie w sekcji Opinie.

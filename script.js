@@ -3,6 +3,7 @@
     const API_LOGOUT = "/auth/logout";
     const API_REVIEW = "/review";
     const API_REVIEWS = "/reviews";
+const API_DB_INIT = "/db/init";
 
     const form = document.getElementById("contactForm");
     const statusEl = document.getElementById("status");
@@ -137,6 +138,15 @@
         liveReviewsEl.innerHTML = '<div class="status status-box err">Nie udało się załadować opinii.</div>';
       }
     }
+
+async function warmupDatabaseSchema() {
+  try {
+    await fetch(API_DB_INIT, { cache: "no-store" });
+  } catch {
+    // non-blocking warmup
+  }
+}
+
 function setAuthUI(user) {
       loggedUser = user || null;
       const isAuth = Boolean(loggedUser && loggedUser.id);
@@ -190,6 +200,7 @@ function setAuthUI(user) {
     });
 
     updateCount();
+    warmupDatabaseSchema();
     refreshAuth();
     loadLiveReviews();
     messageEl.addEventListener("input", updateCount);
