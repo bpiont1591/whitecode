@@ -73,16 +73,22 @@ export async function onRequestPost({ request, env }) {
 
     let webhookResponseOk = true;
     if (webhookUrl) {
-      const res = await fetch(webhookUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
+      try {
+        const res = await fetch(webhookUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
 
-      webhookResponseOk = res.ok;
-      if (!res.ok) {
+        webhookResponseOk = res.ok;
+        if (!res.ok) {
+          webhookStatus = "failed";
+          webhookError = `HTTP ${res.status}`;
+        }
+      } catch {
+        webhookResponseOk = false;
         webhookStatus = "failed";
-        webhookError = `HTTP ${res.status}`;
+        webhookError = "NETWORK_ERROR";
       }
     }
 
@@ -107,7 +113,11 @@ export async function onRequestPost({ request, env }) {
     };
 
     if (!webhookResponseOk) {
-      return json({ ok: false, error: "Discord webhook odrzucił opinię, ale zapisaliśmy ją w bazie.", item: reviewItem }, 502);
+      return json({
+        ok: true,
+        item: reviewItem,
+        warning: "Nie udało się wysłać opinii na webhook Discord, ale zapisaliśmy ją w bazie danych."
+      });
     }
 
     return json({ ok: true, item: reviewItem });

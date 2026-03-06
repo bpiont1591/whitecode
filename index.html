@@ -531,7 +531,11 @@
 
         reviewForm.reset();
         reviewRatingEl.value = "5";
-        setReviewStatus("Opinia wysłana ✅", "ok");
+        if (out.warning) {
+          setReviewStatus(`Opinia zapisana ✅ (${out.warning})`, "ok");
+        } else {
+          setReviewStatus("Opinia wysłana ✅", "ok");
+        }
 
         if (out.item) {
           const current = Array.from(liveReviewsEl.querySelectorAll('.review-card')).map(() => null);
