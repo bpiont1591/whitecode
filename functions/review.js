@@ -1,4 +1,5 @@
 import { readSessionUser } from "./_lib/auth.js";
+import { ensureSchema, saveReview } from "./_lib/db.js";
 
 const DEFAULT_REVIEWER_ROLE_ID = "1448144394426388622";
 
@@ -45,6 +46,7 @@ export async function onRequestPost({ request, env }) {
     if (!webhookUrl) return json({ ok: false, error: "Brak REVIEW_WEBHOOK_URL / DISCORD_WEBHOOK_URL." }, 500);
 
     const discordDisplay = formatDiscordUser(user);
+    const createdAt = new Date().toISOString();
     const payload = {
       username: "Opinie ze strony (WH!TEcode)",
       allowed_mentions: { parse: [] },
@@ -56,9 +58,12 @@ export async function onRequestPost({ request, env }) {
           { name: "👤 Autor", value: `${discordDisplay}\nID: ${safe(user.sub)}`, inline: false }
         ],
         footer: { text: "WH!TEcode • Opinie" },
-        timestamp: new Date().toISOString()
+        timestamp: createdAt
       }]
     };
+
+    let webhookStatus = "sent";
+    let webhookError = null;
 
     const res = await fetch(webhookUrl, {
       method: "POST",
@@ -66,7 +71,24 @@ export async function onRequestPost({ request, env }) {
       body: JSON.stringify(payload)
     });
 
-    if (!res.ok) return json({ ok: false, error: "Discord webhook odrzucił opinię." }, 502);
+    if (!res.ok) {
+      webhookStatus = "failed";
+      webhookError = `HTTP ${res.status}`;
+    }
+
+    if (env.DB) {
+      await ensureSchema(env.DB);
+      await saveReview(env.DB, {
+        created_at: createdAt,
+        discord_user_id: safe(user.sub),
+        discord_user_display: discordDisplay,
+        review: safe(review),
+        webhook_status: webhookStatus,
+        webhook_error: webhookError
+      });
+    }
+
+    if (!res.ok) return json({ ok: false, error: "Discord webhook odrzucił opinię, ale zapisaliśmy ją w bazie." }, 502);
 
     return json({ ok: true });
   } catch {

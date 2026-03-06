@@ -1,4 +1,5 @@
 import { readSessionUser } from "./_lib/auth.js";
+import { ensureSchema, saveContactMessage } from "./_lib/db.js";
 
 export async function onRequestPost({ request, env }) {
   try {
@@ -43,6 +44,8 @@ export async function onRequestPost({ request, env }) {
     }
 
     const discordDisplay = formatDiscordUser(user);
+    const createdAt = new Date().toISOString();
+
     const payload = {
       username: "Kontakt ze strony (WH!TEcode)",
       allowed_mentions: { parse: [] },
@@ -55,9 +58,12 @@ export async function onRequestPost({ request, env }) {
           { name: "👤 Użytkownik Discord", value: `${discordDisplay}\nID: ${safe(user.sub)}`, inline: false }
         ],
         footer: { text: "WH!TEcode • Formularz kontaktowy" },
-        timestamp: new Date().toISOString()
+        timestamp: createdAt
       }]
     };
+
+    let webhookStatus = "sent";
+    let webhookError = null;
 
     const res = await fetch(webhookUrl, {
       method: "POST",
@@ -66,7 +72,27 @@ export async function onRequestPost({ request, env }) {
     });
 
     if (!res.ok) {
-      return json({ ok: false, error: "Discord webhook odrzucił żądanie." }, 502);
+      webhookStatus = "failed";
+      webhookError = `HTTP ${res.status}`;
+    }
+
+    if (env.DB) {
+      await ensureSchema(env.DB);
+      await saveContactMessage(env.DB, {
+        created_at: createdAt,
+        discord_user_id: safe(user.sub),
+        discord_user_display: discordDisplay,
+        form_name: safe(name),
+        form_contact: safe(contact),
+        topic: safe(topic),
+        message: safe(message),
+        webhook_status: webhookStatus,
+        webhook_error: webhookError
+      });
+    }
+
+    if (!res.ok) {
+      return json({ ok: false, error: "Discord webhook odrzucił żądanie, ale wiadomość została zapisana w bazie." }, 502);
     }
 
     return json({ ok: true });

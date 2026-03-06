@@ -39,3 +39,16 @@ Dodany endpoint `POST /review` wymaga:
 
 Opcjonalnie możesz ustawić osobny webhook dla opinii:
 - `REVIEW_WEBHOOK_URL` (fallback: `DISCORD_WEBHOOK_URL`).
+
+
+## Trwałość danych (D1) – żeby nic nie znikało
+Wdrożona została trwała warstwa zapisu do bazy Cloudflare D1 (binding `DB`) dla:
+- wiadomości kontaktowych (`contact_messages`),
+- opinii (`reviews`).
+
+Dane zapisują się nawet jeśli Discord webhook chwilowo zwróci błąd (status webhooka zapisuje się w bazie).
+
+### Co dodać w Cloudflare
+1. Utwórz bazę D1.
+2. Podepnij binding o nazwie `DB` do Pages Functions.
+3. (Opcjonalnie) uruchom `schema.sql` ręcznie; kod i tak tworzy tabele automatycznie przy pierwszym zapisie.

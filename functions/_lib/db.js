@@ -1,0 +1,78 @@
+let schemaReady = false;
+
+export async function ensureSchema(db) {
+  if (!db || schemaReady) return;
+
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS contact_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      created_at TEXT NOT NULL,
+      discord_user_id TEXT NOT NULL,
+      discord_user_display TEXT NOT NULL,
+      form_name TEXT NOT NULL,
+      form_contact TEXT NOT NULL,
+      topic TEXT NOT NULL,
+      message TEXT NOT NULL,
+      webhook_status TEXT NOT NULL DEFAULT 'pending',
+      webhook_error TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS reviews (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      created_at TEXT NOT NULL,
+      discord_user_id TEXT NOT NULL,
+      discord_user_display TEXT NOT NULL,
+      review TEXT NOT NULL,
+      webhook_status TEXT NOT NULL DEFAULT 'pending',
+      webhook_error TEXT
+    );
+  `);
+
+  schemaReady = true;
+}
+
+export async function saveContactMessage(db, row) {
+  if (!db) return null;
+
+  const stmt = db.prepare(`
+    INSERT INTO contact_messages (
+      created_at, discord_user_id, discord_user_display,
+      form_name, form_contact, topic, message,
+      webhook_status, webhook_error
+    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+  `).bind(
+    row.created_at,
+    row.discord_user_id,
+    row.discord_user_display,
+    row.form_name,
+    row.form_contact,
+    row.topic,
+    row.message,
+    row.webhook_status,
+    row.webhook_error ?? null
+  );
+
+  const res = await stmt.run();
+  return res?.meta?.last_row_id ?? null;
+}
+
+export async function saveReview(db, row) {
+  if (!db) return null;
+
+  const stmt = db.prepare(`
+    INSERT INTO reviews (
+      created_at, discord_user_id, discord_user_display,
+      review, webhook_status, webhook_error
+    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+  `).bind(
+    row.created_at,
+    row.discord_user_id,
+    row.discord_user_display,
+    row.review,
+    row.webhook_status,
+    row.webhook_error ?? null
+  );
+
+  const res = await stmt.run();
+  return res?.meta?.last_row_id ?? null;
+}
