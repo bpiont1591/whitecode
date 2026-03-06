@@ -37,16 +37,14 @@ export async function onRequestPost({ request, env }) {
       username: "Kontakt ze strony (WH!TEcode)",
       allowed_mentions: { parse: [] },
       embeds: [{
-        title: "Nowa wiadomość z formularza",
+        title: "📩 Nowa wiadomość z formularza",
         description: message.length > 3500 ? (message.slice(0, 3500) + "…") : message,
         color: 0xFFFFFF,
         fields: [
-          { name: "Nick / Imię", value: safe(name), inline: true },
-          { name: "Kontakt", value: safe(contact), inline: true },
-          { name: "Temat", value: safe(topic), inline: false },
-          { name: "Discord user", value: discordDisplay, inline: true },
-          { name: "Discord ID", value: safe(user.sub), inline: true }
+          { name: "🎯 Temat", value: safe(topic), inline: false },
+          { name: "👤 Użytkownik Discord", value: `${discordDisplay}\nID: ${safe(user.sub)}`, inline: false }
         ],
+        footer: { text: "WH!TEcode • Formularz kontaktowy" },
         timestamp: new Date().toISOString()
       }]
     };
