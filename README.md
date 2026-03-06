@@ -58,7 +58,8 @@ Dane zapisują się nawet jeśli Discord webhook chwilowo zwróci błąd (status
 4. Endpointy dodatkowo próbują auto-detekcji i testu użycia bindingu D1, ale jeśli masz wiele bindingów D1 ustaw `D1_BINDING_NAME`, żeby jednoznacznie wskazać bazę.
 5. Tabele `reviews` i `contact_messages` są tworzone automatycznie przy pierwszym zapisie i dodatkowo weryfikowane po stronie backendu.
 6. Strona wykonuje też cichy warmup (`GET /db/init`) przy ładowaniu, aby przygotować tabele wcześniej.
-7. (Opcjonalnie) uruchom `schema.sql` ręcznie, jeśli chcesz przygotować schemat z wyprzedzeniem.
+7. Dodatkowo middleware Functions próbuje inicjalizacji schematu przy każdym requestcie (nieblokująco), aby automatycznie odtworzyć tabele po wdrożeniu.
+8. (Opcjonalnie) uruchom `schema.sql` ręcznie, jeśli chcesz przygotować schemat z wyprzedzeniem.
 
 
 ## Oceny opinii i widoczność na stronie

@@ -191,7 +191,7 @@ function isD1Binding(obj) {
     obj &&
     typeof obj === "object" &&
     typeof obj.prepare === "function" &&
-    (typeof obj.exec === "function" || typeof obj.batch === "function")
+    true
   );
 }
 
@@ -200,17 +200,34 @@ async function runSql(db, sql) {
     return await db.exec(sql);
   }
 
-  if (typeof db.batch === "function" && typeof db.prepare === "function") {
-    return await db.batch([db.prepare(sql)]);
+  if (typeof db.prepare === "function") {
+    const stmt = db.prepare(sql);
+    if (typeof stmt.run === "function") {
+      return await stmt.run();
+    }
+
+    if (typeof db.batch === "function") {
+      return await db.batch([stmt]);
+    }
   }
 
   throw new Error("unsupported D1 API shape");
 }
 
 async function tableExists(db, tableName) {
-  const out = await db.prepare(
+  const stmt = db.prepare(
     `SELECT name FROM sqlite_master WHERE type='table' AND name=?1 LIMIT 1`
-  ).bind(tableName).first();
+  ).bind(tableName);
 
-  return Boolean(out?.name);
+  if (typeof stmt.first === "function") {
+    const out = await stmt.first();
+    return Boolean(out?.name);
+  }
+
+  if (typeof stmt.all === "function") {
+    const out = await stmt.all();
+    return Array.isArray(out?.results) && out.results.length > 0;
+  }
+
+  throw new Error("unsupported query API shape");
 }
