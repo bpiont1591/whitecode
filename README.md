@@ -8,7 +8,6 @@ Aby formularz działał tylko po logowaniu Discord OAuth i wysyłał dane użytk
 - `DISCORD_CLIENT_SECRET` – OAuth2 Client Secret aplikacji Discord
 - `DISCORD_REDIRECT_URI` – np. `https://whitecode.pl/auth/discord/callback`
 - `SESSION_SECRET` – długi losowy sekret do podpisywania sesji cookie
-- `D1_BINDING_NAME` – *(opcjonalnie)* nazwa bindingu D1, jeśli nie używasz standardowej nazwy `DB` (dla `DB` nie trzeba tej zmiennej; błędna wartość nie blokuje fallbacku do `DB`)
 
 ## Endpointy auth
 - `GET /auth/discord/start`
@@ -16,7 +15,6 @@ Aby formularz działał tylko po logowaniu Discord OAuth i wysyłał dane użytk
 - `GET /auth/me`
 - `POST /auth/logout`
 - `GET /reviews`
-- `GET /db/init`
 
 ## Ustawienia Discord OAuth
 W panelu Discord Developer Portal:
@@ -44,24 +42,13 @@ Opcjonalnie możesz ustawić osobny webhook dla opinii:
 - `REVIEW_WEBHOOK_URL` (fallback: `DISCORD_WEBHOOK_URL`).
 
 
-## Trwałość danych (D1) – żeby nic nie znikało
-Wdrożona została trwała warstwa zapisu do bazy Cloudflare D1 (preferowany binding `DB`; backend wykrywa też inne poprawne bindingi D1) dla:
-- opinii (`reviews`).
+## Opinie bez bazy danych (tryb uproszczony)
+Opinie są dodawane bezpośrednio przez API `/review` i trzymane w pamięci runtime (`/reviews`) bez zapisu do D1.
 
-Dane opinii zapisują się nawet jeśli Discord webhook chwilowo zwróci błąd (status webhooka zapisuje się w bazie).
-
-### Co dodać w Cloudflare
-1. Utwórz bazę D1.
-2. Podepnij binding D1 do Pages Functions (najlepiej nazwa `DB`).
-3. Jeśli używasz innej nazwy bindingu, ustaw `D1_BINDING_NAME` na dokładną nazwę bindingu (to najpewniejsza opcja).
-4. Endpointy dodatkowo próbują auto-detekcji i testu użycia bindingu D1, ale jeśli masz wiele bindingów D1 ustaw `D1_BINDING_NAME`, żeby jednoznacznie wskazać bazę.
-5. Tabela `reviews` jest tworzona automatycznie przy pierwszym zapisie i dodatkowo weryfikowana po stronie backendu.
-6. Strona wykonuje też cichy warmup (`GET /db/init`) przy ładowaniu, aby przygotować tabele wcześniej.
-7. Dodatkowo middleware Functions próbuje inicjalizacji schematu przy każdym requestcie (nieblokująco), aby automatycznie odtworzyć tabele po wdrożeniu.
-8. (Opcjonalnie) uruchom `schema.sql` ręcznie, jeśli chcesz przygotować schemat z wyprzedzeniem.
+Uwaga: po restarcie instancji lub nowym deployu lista opinii może się wyzerować.
 
 
 ## Oceny opinii i widoczność na stronie
 - Formularz opinii wymaga wyboru oceny 1-5 gwiazdek.
-- Endpoint `POST /review` zapisuje ocenę i treść do D1.
+- Endpoint `POST /review` zwraca opinię i dodaje ją do listy w pamięci runtime.
 - Endpoint `GET /reviews` zwraca najnowsze opinie, które są renderowane na stronie w sekcji Opinie.

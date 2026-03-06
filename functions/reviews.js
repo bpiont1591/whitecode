@@ -1,35 +1,7 @@
-import { ensureSchema, resolveD1DatabaseForUsage } from "./_lib/db.js";
+const RECENT_REVIEWS = globalThis.__WHITECODE_RECENT_REVIEWS__ || (globalThis.__WHITECODE_RECENT_REVIEWS__ = []);
 
-export async function onRequestGet({ env }) {
-  try {
-    const dbInfo = await resolveD1DatabaseForUsage(env);
-    const db = dbInfo.db;
-    if (!db) {
-      const hint = (dbInfo.reason === "ambiguous" || dbInfo.reason === "probe_failed")
-        ? `Wykryto wiele bindingów D1 (${dbInfo.candidates.join(", ")}). Ustaw D1_BINDING_NAME.`
-        : "Ustaw poprawny D1 binding lub D1_BINDING_NAME.";
-      return json({ ok: false, items: [], error: `Brak bindowania D1 w Functions. ${hint}` }, 500);
-    }
-
-    let schemaWarning = null;
-    try {
-      await ensureSchema(db);
-    } catch {
-      schemaWarning = "Nie udało się zainicjalizować pełnego schematu D1; próbuję odczytać istniejące opinie.";
-    }
-
-    const result = await db.prepare(`
-      SELECT id, created_at, discord_user_id, discord_user_display, review, rating
-      FROM reviews
-      ORDER BY id DESC
-      LIMIT 24
-    `).all();
-
-    const items = Array.isArray(result?.results) ? result.results : [];
-    return json({ ok: true, items, warning: schemaWarning });
-  } catch {
-    return json({ ok: false, items: [], error: "Nie udało się pobrać opinii z bazy D1 (sprawdź binding i tabelę reviews)." }, 500);
-  }
+export async function onRequestGet() {
+  return json({ ok: true, items: RECENT_REVIEWS.slice(0, 24) });
 }
 
 function json(obj, status = 200) {

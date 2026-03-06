@@ -1,5 +1,5 @@
 import { readSessionUser } from "./_lib/auth.js";
-import { ensureSchema, resolveD1DatabaseForUsage, saveReview } from "./_lib/db.js";
+const RECENT_REVIEWS = globalThis.__WHITECODE_RECENT_REVIEWS__ || (globalThis.__WHITECODE_RECENT_REVIEWS__ = []);
 
 export async function onRequestPost({ request, env }) {
   try {
@@ -53,14 +53,6 @@ export async function onRequestPost({ request, env }) {
     }
 
     const webhookUrl = env.REVIEW_WEBHOOK_URL || env.DISCORD_WEBHOOK_URL;
-    const dbInfo = await resolveD1DatabaseForUsage(env);
-    const db = dbInfo.db;
-    if (!db) {
-      const hint = (dbInfo.reason === "ambiguous" || dbInfo.reason === "probe_failed")
-        ? `Wykryto wiele bindingów D1 (${dbInfo.candidates.join(", ")}). Ustaw D1_BINDING_NAME.`
-        : "Ustaw D1 binding (np. DB) lub env D1_BINDING_NAME=twoja_nazwa_bindingu.";
-      return json({ ok: false, error: `Brak bindowania D1 w Functions. ${hint}` }, 500);
-    }
 
     const discordDisplay = formatDiscordUser(user);
     const createdAt = new Date().toISOString();
@@ -106,26 +98,6 @@ export async function onRequestPost({ request, env }) {
       }
     }
 
-    try {
-      try {
-        await ensureSchema(db);
-      } catch {
-        // allow write attempt even when full schema init fails
-      }
-
-      await saveReview(db, {
-        created_at: createdAt,
-        discord_user_id: safe(user.sub),
-        discord_user_display: discordDisplay,
-        review: safe(review),
-        rating,
-        webhook_status: webhookStatus,
-        webhook_error: webhookError
-      });
-    } catch {
-      return json({ ok: false, error: "Nie udało się zapisać opinii do tabeli reviews w D1." }, 500);
-    }
-
     const reviewItem = {
       created_at: createdAt,
       discord_user_id: safe(user.sub),
@@ -134,11 +106,15 @@ export async function onRequestPost({ request, env }) {
       rating
     };
 
+
+    RECENT_REVIEWS.unshift(reviewItem);
+    if (RECENT_REVIEWS.length > 24) RECENT_REVIEWS.length = 24;
+
     if (!webhookResponseOk) {
       return json({
         ok: true,
         item: reviewItem,
-        warning: "Nie udało się wysłać opinii na webhook Discord, ale zapisaliśmy ją w bazie danych."
+        warning: "Nie udało się wysłać opinii na webhook Discord, ale opinia pojawi się na stronie (bez zapisu do bazy)."
       });
     }
 
