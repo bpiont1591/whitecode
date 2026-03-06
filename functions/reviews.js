@@ -1,13 +1,14 @@
-import { ensureSchema } from "./_lib/db.js";
+import { ensureSchema, resolveD1Database } from "./_lib/db.js";
 
 export async function onRequestGet({ env }) {
   try {
-    if (!env.DB) {
-      return json({ ok: true, items: [] });
+    const db = resolveD1Database(env);
+    if (!db) {
+      return json({ ok: false, items: [], error: "Brak bindowania D1 w Functions." }, 500);
     }
 
-    await ensureSchema(env.DB);
-    const result = await env.DB.prepare(`
+    await ensureSchema(db);
+    const result = await db.prepare(`
       SELECT id, created_at, discord_user_display, review, rating
       FROM reviews
       ORDER BY id DESC

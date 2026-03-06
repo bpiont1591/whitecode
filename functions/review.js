@@ -1,5 +1,5 @@
 import { readSessionUser } from "./_lib/auth.js";
-import { ensureSchema, saveReview } from "./_lib/db.js";
+import { ensureSchema, resolveD1Database, saveReview } from "./_lib/db.js";
 
 const DEFAULT_REVIEWER_ROLE_ID = "1448144394426388622";
 
@@ -47,6 +47,10 @@ export async function onRequestPost({ request, env }) {
     }
 
     const webhookUrl = env.REVIEW_WEBHOOK_URL || env.DISCORD_WEBHOOK_URL;
+    const db = resolveD1Database(env);
+    if (!db) {
+      return json({ ok: false, error: "Brak bindowania D1 w Functions. Ustaw binding (np. DB) do bazy whitecode-prod." }, 500);
+    }
 
     const discordDisplay = formatDiscordUser(user);
     const createdAt = new Date().toISOString();
@@ -92,9 +96,8 @@ export async function onRequestPost({ request, env }) {
       }
     }
 
-    if (env.DB) {
-      await ensureSchema(env.DB);
-      await saveReview(env.DB, {
+    await ensureSchema(db);
+    await saveReview(db, {
         created_at: createdAt,
         discord_user_id: safe(user.sub),
         discord_user_display: discordDisplay,
@@ -103,7 +106,6 @@ export async function onRequestPost({ request, env }) {
         webhook_status: webhookStatus,
         webhook_error: webhookError
       });
-    }
 
     const reviewItem = {
       created_at: createdAt,

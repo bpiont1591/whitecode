@@ -43,7 +43,7 @@ Opcjonalnie możesz ustawić osobny webhook dla opinii:
 
 
 ## Trwałość danych (D1) – żeby nic nie znikało
-Wdrożona została trwała warstwa zapisu do bazy Cloudflare D1 (binding `DB`) dla:
+Wdrożona została trwała warstwa zapisu do bazy Cloudflare D1 (preferowany binding `DB`; backend wykrywa też inne poprawne bindingi D1) dla:
 - wiadomości kontaktowych (`contact_messages`),
 - opinii (`reviews`).
 
@@ -51,8 +51,9 @@ Dane zapisują się nawet jeśli Discord webhook chwilowo zwróci błąd (status
 
 ### Co dodać w Cloudflare
 1. Utwórz bazę D1.
-2. Podepnij binding o nazwie `DB` do Pages Functions.
-3. (Opcjonalnie) uruchom `schema.sql` ręcznie; kod i tak tworzy tabele automatycznie przy pierwszym zapisie.
+2. Podepnij binding D1 do Pages Functions (najlepiej nazwa `DB`).
+3. Jeśli używasz innej nazwy bindingu, endpointy i tak spróbują wykryć go automatycznie.
+4. (Opcjonalnie) uruchom `schema.sql` ręcznie; kod i tak tworzy tabele automatycznie przy pierwszym zapisie.
 
 
 ## Oceny opinii i widoczność na stronie

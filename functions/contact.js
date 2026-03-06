@@ -1,5 +1,5 @@
 import { readSessionUser } from "./_lib/auth.js";
-import { ensureSchema, saveContactMessage } from "./_lib/db.js";
+import { ensureSchema, resolveD1Database, saveContactMessage } from "./_lib/db.js";
 
 export async function onRequestPost({ request, env }) {
   try {
@@ -43,6 +43,8 @@ export async function onRequestPost({ request, env }) {
       return json({ ok: false, error: "Brak DISCORD_WEBHOOK_URL w Cloudflare." }, 500);
     }
 
+    const db = resolveD1Database(env);
+
     const discordDisplay = formatDiscordUser(user);
     const createdAt = new Date().toISOString();
 
@@ -76,9 +78,9 @@ export async function onRequestPost({ request, env }) {
       webhookError = `HTTP ${res.status}`;
     }
 
-    if (env.DB) {
-      await ensureSchema(env.DB);
-      await saveContactMessage(env.DB, {
+    if (db) {
+      await ensureSchema(db);
+      await saveContactMessage(db, {
         created_at: createdAt,
         discord_user_id: safe(user.sub),
         discord_user_display: discordDisplay,

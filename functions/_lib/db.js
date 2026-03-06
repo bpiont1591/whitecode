@@ -85,3 +85,28 @@ export async function saveReview(db, row) {
   const res = await stmt.run();
   return res?.meta?.last_row_id ?? null;
 }
+
+export function resolveD1Database(env) {
+  if (!env || typeof env !== "object") return null;
+
+  const preferred = ["DB", "WHITECODE_PROD", "D1", "DATABASE"];
+  for (const key of preferred) {
+    const cand = env[key];
+    if (isD1Binding(cand)) return cand;
+  }
+
+  for (const value of Object.values(env)) {
+    if (isD1Binding(value)) return value;
+  }
+
+  return null;
+}
+
+function isD1Binding(obj) {
+  return Boolean(
+    obj &&
+    typeof obj === "object" &&
+    typeof obj.prepare === "function" &&
+    typeof obj.exec === "function"
+  );
+}
