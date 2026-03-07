@@ -28,6 +28,26 @@ function updateCount() {
   charCountEl.textContent = `${len}/4000`;
 }
 
+function setSubmitting(isSubmitting) {
+  if (!form) return;
+
+  const controls = form.querySelectorAll("input, textarea, select, button");
+  for (const ctrl of controls) {
+    if (ctrl.id === "name" || ctrl.id === "contact") continue;
+    ctrl.disabled = isSubmitting;
+  }
+
+  if (submitBtn) {
+    submitBtn.classList.toggle("is-loading", isSubmitting);
+    if (isSubmitting) {
+      submitBtn.dataset.originalText = submitBtn.innerHTML;
+      submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Wysyłam...';
+    } else if (submitBtn.dataset.originalText) {
+      submitBtn.innerHTML = submitBtn.dataset.originalText;
+    }
+  }
+}
+
 function setAuthUI(user) {
   loggedUser = user || null;
   const isAuth = Boolean(loggedUser && loggedUser.id);
@@ -101,21 +121,23 @@ if (form) {
     }
 
     setStatus("Wysyłam wiadomość…", "");
+    setSubmitting(true);
 
     try {
       const res = await fetch(API_CONTACT, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          topic,
-          message
-        })
+        body: JSON.stringify({ topic, message })
       });
 
       const out = await res.json().catch(() => ({}));
       if (!res.ok || !out.ok) {
-        setStatus(out.error || "Nie udało się wysłać wiadomości.", "err");
+        if (res.status === 429 && out.retry_after_sec) {
+          setStatus(`Za szybko wysyłasz wiadomości. Spróbuj za ${out.retry_after_sec}s.`, "err");
+        } else {
+          setStatus(out.error || "Nie udało się wysłać wiadomości.", "err");
+        }
         return;
       }
 
@@ -131,6 +153,9 @@ if (form) {
       setStatus("Wiadomość wysłana ✅", "ok");
     } catch {
       setStatus("Błąd połączenia. Spróbuj ponownie.", "err");
+    } finally {
+      setSubmitting(false);
+      if (submitBtn && !loggedUser) submitBtn.disabled = true;
     }
   });
 }

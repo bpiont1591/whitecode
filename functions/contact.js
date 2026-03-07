@@ -1,5 +1,10 @@
 import { readSessionUser } from "./_lib/auth.js";
 
+const RATE_LIMIT_STATE = globalThis.__WC_CONTACT_RATE_LIMIT__ || (globalThis.__WC_CONTACT_RATE_LIMIT__ = new Map());
+const COOLDOWN_MS = 45 * 1000;
+const WINDOW_MS = 10 * 60 * 1000;
+const MAX_REQUESTS_IN_WINDOW = 5;
+
 export async function onRequestPost({ request, env }) {
   try {
     const user = await readSessionUser(request, env);
@@ -10,6 +15,11 @@ export async function onRequestPost({ request, env }) {
     const originError = validateOrigin(request);
     if (originError) {
       return json({ ok: false, error: originError }, 403);
+    }
+
+    const rateLimitError = checkRateLimit(request, user);
+    if (rateLimitError) {
+      return json({ ok: false, error: rateLimitError.message, retry_after_sec: rateLimitError.retryAfterSec }, 429);
     }
 
     const ct = request.headers.get("content-type") || "";
@@ -61,19 +71,11 @@ export async function onRequestPost({ request, env }) {
       }]
     };
 
-    let webhookStatus = "sent";
-    let webhookError = null;
-
     const res = await fetch(webhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
     });
-
-    if (!res.ok) {
-      webhookStatus = "failed";
-      webhookError = `HTTP ${res.status}`;
-    }
 
     if (!res.ok) {
       return json({ ok: false, error: "Discord webhook odrzucił żądanie." }, 502);
@@ -82,6 +84,55 @@ export async function onRequestPost({ request, env }) {
     return json({ ok: true });
   } catch {
     return json({ ok: false, error: "Błąd serwera." }, 500);
+  }
+}
+
+function checkRateLimit(request, user) {
+  const now = Date.now();
+  const ip = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || "no-ip";
+  const userId = String(user?.sub || "unknown");
+  const key = `${userId}:${ip}`;
+
+  const current = RATE_LIMIT_STATE.get(key) || { last: 0, hits: [] };
+
+  if (now - current.last < COOLDOWN_MS) {
+    const retryMs = COOLDOWN_MS - (now - current.last);
+    return {
+      message: "Za szybko wysyłasz wiadomości.",
+      retryAfterSec: Math.ceil(retryMs / 1000)
+    };
+  }
+
+  const windowStart = now - WINDOW_MS;
+  current.hits = current.hits.filter((ts) => ts >= windowStart);
+  if (current.hits.length >= MAX_REQUESTS_IN_WINDOW) {
+    const retryMs = current.hits[0] + WINDOW_MS - now;
+    return {
+      message: "Przekroczono limit wiadomości. Spróbuj później.",
+      retryAfterSec: Math.max(1, Math.ceil(retryMs / 1000))
+    };
+  }
+
+  current.last = now;
+  current.hits.push(now);
+  RATE_LIMIT_STATE.set(key, current);
+
+  if (RATE_LIMIT_STATE.size > 2000) {
+    trimRateLimitMap(now - WINDOW_MS);
+  }
+
+  return null;
+}
+
+function trimRateLimitMap(cutoff) {
+  for (const [key, item] of RATE_LIMIT_STATE.entries()) {
+    const recentHits = (item.hits || []).filter((ts) => ts >= cutoff);
+    if (!recentHits.length && item.last < cutoff) {
+      RATE_LIMIT_STATE.delete(key);
+    } else {
+      item.hits = recentHits;
+      RATE_LIMIT_STATE.set(key, item);
+    }
   }
 }
 

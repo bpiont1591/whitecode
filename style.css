@@ -535,3 +535,13 @@ footer {
   .form-row { grid-template-columns: 1fr; }
   .footer-grid { grid-template-columns: 1fr; }
 }
+
+
+.btn.is-loading {
+  opacity: 0.85;
+  cursor: wait;
+}
+
+.btn.is-loading i {
+  margin-right: 6px;
+}
