@@ -2,7 +2,7 @@ const API_CONTACT = "/contact";
 const API_ME = "/auth/me";
 const API_LOGOUT = "/auth/logout";
 const API_DISCORD_STATUS = "/discord/status";
-const API_OPINIONS = "/opinions";
+const API_OPINIONS = "/api/opinions";
 
 const form = document.getElementById("contactForm");
 const statusEl = document.getElementById("status");
@@ -173,9 +173,12 @@ async function refreshOpinions() {
 
   try {
     const res = await fetch(API_OPINIONS, { cache: "no-store" });
-    const out = await res.json().catch(() => ({}));
+    const contentType = res.headers.get("content-type") || "";
+    const out = contentType.includes("application/json")
+      ? await res.json().catch(() => ({}))
+      : { ok: false, error: "Endpoint opinii zwrócił niepoprawny format (oczekiwano JSON)." };
 
-    if (!res.ok || !out.ok) {
+    if (!res.ok || !out.ok || !Array.isArray(out.items)) {
       opinionsListEl.innerHTML = "";
       opinionsStatusEl.textContent = out.error || "Nie udało się pobrać opinii.";
       return;
