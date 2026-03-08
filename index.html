@@ -56,6 +56,7 @@
 
       <div class="nav-links">
         <a href="#oferta">Oferta</a>
+        <a href="#opinie">Opinie</a>
         <a href="#kontakt">Kontakt</a>
         <button id="navLogoutBtn" class="nav-logout" type="button" hidden><i class="fa-solid fa-right-from-bracket"></i> Wyloguj</button>
       </div>
@@ -163,6 +164,47 @@
 
 
     
+
+    <section id="opinie">
+      <h2 class="section-title">Opinie klientów</h2>
+      <p class="section-subtitle">Kilka słów od osób, które z nami współpracowały.</p>
+
+      <div class="panel live-reviews-panel">
+        <h3>Najnowsze opinie ze strony</h3>
+        <p class="panel-sub">Opinie dodane przez zalogowanych użytkowników Discord.</p>
+        <div id="liveReviews" class="reviews-track" aria-live="polite"></div>
+      </div>
+
+      <div class="panel review-submit-panel">
+        <h3 class="review-submit-title">Dodaj opinię o współpracy</h3>
+        <p class="panel-sub">Po zalogowaniu możesz dodać opinię. Nick i ID pobierane są automatycznie z Discord.</p>
+        <div id="reviewIdentity" class="status status-box">Najpierw zaloguj się przez Discord, aby dodać opinię.</div>
+
+        <form id="reviewForm" class="review-form">
+          <div class="review-fields">
+            <div class="field">
+              <label for="reviewRating">Ocena</label>
+              <select id="reviewRating" name="reviewRating" required>
+                <option value="5">5/5 ⭐⭐⭐⭐⭐</option>
+                <option value="4">4/5 ⭐⭐⭐⭐</option>
+                <option value="3">3/5 ⭐⭐⭐</option>
+                <option value="2">2/5 ⭐⭐</option>
+                <option value="1">1/5 ⭐</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="reviewMessage">Twoja opinia</label>
+              <textarea id="reviewMessage" name="reviewMessage" placeholder="Napisz krótką opinię o współpracy..." required></textarea>
+            </div>
+          </div>
+          <button id="reviewSubmitBtn" class="btn btn-ghost" type="submit" disabled>
+            <i class="fa-solid fa-star"></i> Dodaj opinię
+          </button>
+          <div id="reviewStatus" class="status status-box" aria-live="polite"></div>
+        </form>
+      </div>
+    </section>
+
 
     <section id="kontakt">
       <h2 class="section-title">Skontaktuj się z nami</h2>
