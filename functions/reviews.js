@@ -1,17 +1,13 @@
-import { listReviews } from "./_lib/reviewsStore.js";
-
-export async function onRequestGet({ env }) {
-  try {
-    const items = await listReviews(env, 24);
-    return json({ ok: true, items });
-  } catch {
-    return json({ ok: false, error: "Nie udało się pobrać opinii." }, 500);
-  }
+function json(body, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      "cache-control": "no-store"
+    }
+  });
 }
 
-function json(obj, status = 200) {
-  return new Response(JSON.stringify(obj), {
-    status,
-    headers: { "Content-Type": "application/json; charset=utf-8" }
-  });
+export async function onRequestGet() {
+  return json({ ok: true, items: [] });
 }
