@@ -2,6 +2,7 @@ const API_CONTACT = "/contact";
 const API_ME = "/auth/me";
 const API_LOGOUT = "/auth/logout";
 const API_DISCORD_STATUS = "/discord/status";
+const API_OPINIONS = "/opinions";
 
 const form = document.getElementById("contactForm");
 const statusEl = document.getElementById("status");
@@ -23,6 +24,8 @@ const discordMemberCountEl = document.getElementById("discordMemberCount");
 const discordBotStatusEl = document.getElementById("discordBotStatus");
 const discordApiStatusEl = document.getElementById("discordApiStatus");
 const discordStatusInfoEl = document.getElementById("discordStatusInfo");
+const opinionsListEl = document.getElementById("opinionsList");
+const opinionsStatusEl = document.getElementById("opinionsStatus");
 
 let loggedUser = null;
 let discordStatusTimer = null;
@@ -126,6 +129,76 @@ function renderDiscordStatus(data) {
     const stale = data.stale ? " (cache)" : "";
     discordStatusInfoEl.textContent = `Ostatnia aktualizacja: ${formatDateTime(data.updatedAt)}${stale}`;
   }
+}
+
+function escapeHtml(str) {
+  return String(str || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function stars(n) {
+  const value = Math.max(1, Math.min(5, Number(n || 0)));
+  return "⭐".repeat(value) + "☆".repeat(5 - value);
+}
+
+function renderOpinionCard(item) {
+  const author = escapeHtml(item.userTag || `ID: ${item.userId || "nieznany"}`);
+  const text = escapeHtml(item.text || "");
+  const atmosfera = escapeHtml(item.atmosfera || "—");
+  const przebieg = escapeHtml(item.przebieg || "—");
+  const rating = Math.max(1, Math.min(5, Number(item.rating || 0)));
+
+  return `
+    <article class="opinion-card">
+      <div class="opinion-head">
+        <strong>${stars(rating)} (${rating}/5)</strong>
+        <span>${formatDateTime(item.createdAt)}</span>
+      </div>
+      <div class="opinion-author">${author}</div>
+      <p class="opinion-text">${text || "—"}</p>
+      <div class="opinion-meta">
+        <span><b>Atmosfera:</b> ${atmosfera}</span>
+        <span><b>Przebieg:</b> ${przebieg}</span>
+      </div>
+    </article>
+  `;
+}
+
+async function refreshOpinions() {
+  if (!opinionsListEl || !opinionsStatusEl) return;
+
+  try {
+    const res = await fetch(API_OPINIONS, { cache: "no-store" });
+    const out = await res.json().catch(() => ({}));
+
+    if (!res.ok || !out.ok) {
+      opinionsListEl.innerHTML = "";
+      opinionsStatusEl.textContent = out.error || "Nie udało się pobrać opinii.";
+      return;
+    }
+
+    const items = Array.isArray(out.items) ? out.items : [];
+    if (!items.length) {
+      opinionsListEl.innerHTML = "";
+      opinionsStatusEl.textContent = "Brak opinii do wyświetlenia.";
+      return;
+    }
+
+    opinionsListEl.innerHTML = items.map(renderOpinionCard).join("");
+    opinionsStatusEl.textContent = `Załadowano ${items.length} opinii. Ostatnia aktualizacja: ${formatDateTime(new Date().toISOString())}`;
+  } catch {
+    opinionsListEl.innerHTML = "";
+    opinionsStatusEl.textContent = "Błąd połączenia przy pobieraniu opinii.";
+  }
+}
+
+function startOpinionsAutoRefresh() {
+  refreshOpinions();
+  setInterval(refreshOpinions, 60_000);
 }
 
 async function refreshDiscordStatus() {
@@ -260,3 +333,4 @@ if (messageEl) messageEl.addEventListener("input", updateCount);
 updateCount();
 refreshAuth();
 startDiscordStatusAutoRefresh();
+startOpinionsAutoRefresh();
