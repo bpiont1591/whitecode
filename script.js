@@ -24,7 +24,7 @@ const discordMemberCountEl = document.getElementById("discordMemberCount");
 const discordBotStatusEl = document.getElementById("discordBotStatus");
 const discordApiStatusEl = document.getElementById("discordApiStatus");
 const discordStatusInfoEl = document.getElementById("discordStatusInfo");
-const opinionsListEl = document.getElementById("opinionsList");
+const opinionsListEl = document.getElementById("opinions") || document.getElementById("opinionsList");
 const opinionsStatusEl = document.getElementById("opinionsStatus");
 
 let loggedUser = null;
@@ -176,26 +176,26 @@ async function refreshOpinions() {
     const contentType = res.headers.get("content-type") || "";
     const out = contentType.includes("application/json")
       ? await res.json().catch(() => ({}))
-      : { ok: false, error: "Endpoint opinii zwrócił niepoprawny format (oczekiwano JSON)." };
+      : { ok: false, error: "Nie udało się pobrać opinii." };
 
     if (!res.ok || !out.ok || !Array.isArray(out.items)) {
       opinionsListEl.innerHTML = "";
-      opinionsStatusEl.textContent = out.error || "Nie udało się pobrać opinii.";
+      opinionsStatusEl.textContent = "Nie udało się pobrać opinii.";
       return;
     }
 
     const items = Array.isArray(out.items) ? out.items : [];
     if (!items.length) {
       opinionsListEl.innerHTML = "";
-      opinionsStatusEl.textContent = "Brak opinii do wyświetlenia.";
+      opinionsStatusEl.textContent = "Na razie nie ma jeszcze opinii.";
       return;
     }
 
     opinionsListEl.innerHTML = items.map(renderOpinionCard).join("");
-    opinionsStatusEl.textContent = `Załadowano ${items.length} opinii. Ostatnia aktualizacja: ${formatDateTime(new Date().toISOString())}`;
+    opinionsStatusEl.textContent = `Załadowano ${items.length} opinii.`;
   } catch {
     opinionsListEl.innerHTML = "";
-    opinionsStatusEl.textContent = "Błąd połączenia przy pobieraniu opinii.";
+    opinionsStatusEl.textContent = "Nie udało się pobrać opinii.";
   }
 }
 
