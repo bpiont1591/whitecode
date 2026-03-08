@@ -300,7 +300,8 @@ h1 span { color: var(--accent-strong); text-shadow: 0 0 22px rgba(228, 235, 255,
 }
 
 input,
-textarea {
+textarea,
+select {
   width: 100%;
   border: 1px solid var(--line);
   background: rgba(0,0,0,0.25);
@@ -311,13 +312,15 @@ textarea {
 }
 
 input:focus,
-textarea:focus {
+textarea:focus,
+select:focus {
   outline: none;
   border-color: rgba(228,235,255,0.55);
   box-shadow: 0 0 0 4px rgba(159,183,255,0.14);
 }
 
 textarea { min-height: 150px; resize: vertical; }
+.review-panel { max-width: 840px; margin: 0 auto 14px; }
 .char-row { display: flex; justify-content: space-between; color: var(--muted); font-size: 0.87rem; }
 .btn-wide { width: 100%; }
 
