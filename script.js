@@ -24,7 +24,7 @@ const discordMemberCountEl = document.getElementById("discordMemberCount");
 const discordBotStatusEl = document.getElementById("discordBotStatus");
 const discordApiStatusEl = document.getElementById("discordApiStatus");
 const discordStatusInfoEl = document.getElementById("discordStatusInfo");
-const opinionsListEl = document.getElementById("opinions") || document.getElementById("opinionsList");
+const opinionsEl = document.getElementById("opinions") || document.getElementById("opinionsList");
 const opinionsStatusEl = document.getElementById("opinionsStatus");
 
 let loggedUser = null;
@@ -169,33 +169,44 @@ function renderOpinionCard(item) {
 }
 
 async function refreshOpinions() {
-  if (!opinionsListEl || !opinionsStatusEl) return;
+  if (!opinionsEl) return;
 
   try {
-    const res = await fetch(API_OPINIONS, { cache: "no-store" });
-    const contentType = res.headers.get("content-type") || "";
-    const out = contentType.includes("application/json")
-      ? await res.json().catch(() => ({}))
-      : { ok: false, error: "Nie udało się pobrać opinii." };
+    const response = await fetch("/api/opinions", { cache: "no-store" });
 
-    if (!res.ok || !out.ok || !Array.isArray(out.items)) {
-      opinionsListEl.innerHTML = "";
-      opinionsStatusEl.textContent = "Nie udało się pobrać opinii.";
+    if (!response.ok) {
+      opinionsEl.innerHTML = '<p class="status-note">Nie udało się pobrać opinii.</p>';
+      if (opinionsStatusEl) opinionsStatusEl.textContent = "Nie udało się pobrać opinii.";
       return;
     }
 
-    const items = Array.isArray(out.items) ? out.items : [];
-    if (!items.length) {
-      opinionsListEl.innerHTML = "";
-      opinionsStatusEl.textContent = "Na razie nie ma jeszcze opinii.";
+    const contentType = response.headers.get("content-type") || "";
+    if (!contentType.toLowerCase().includes("application/json")) {
+      opinionsEl.innerHTML = '<p class="status-note">Nie udało się pobrać opinii.</p>';
+      if (opinionsStatusEl) opinionsStatusEl.textContent = "Nie udało się pobrać opinii.";
       return;
     }
 
-    opinionsListEl.innerHTML = items.map(renderOpinionCard).join("");
-    opinionsStatusEl.textContent = `Załadowano ${items.length} opinii.`;
+    const data = await response.json().catch(() => ({}));
+    const items = Array.isArray(data?.items) ? data.items : null;
+
+    if (!data?.ok || !items) {
+      opinionsEl.innerHTML = '<p class="status-note">Nie udało się pobrać opinii.</p>';
+      if (opinionsStatusEl) opinionsStatusEl.textContent = "Nie udało się pobrać opinii.";
+      return;
+    }
+
+    if (items.length === 0) {
+      opinionsEl.innerHTML = '<p class="status-note">Na razie nie ma jeszcze opinii.</p>';
+      if (opinionsStatusEl) opinionsStatusEl.textContent = "Na razie nie ma jeszcze opinii.";
+      return;
+    }
+
+    opinionsEl.innerHTML = items.map(renderOpinionCard).join("");
+    if (opinionsStatusEl) opinionsStatusEl.textContent = `Załadowano ${items.length} opinii.`;
   } catch {
-    opinionsListEl.innerHTML = "";
-    opinionsStatusEl.textContent = "Nie udało się pobrać opinii.";
+    opinionsEl.innerHTML = '<p class="status-note">Nie udało się pobrać opinii.</p>';
+    if (opinionsStatusEl) opinionsStatusEl.textContent = "Nie udało się pobrać opinii.";
   }
 }
 
