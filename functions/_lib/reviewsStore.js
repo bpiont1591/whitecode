@@ -4,6 +4,16 @@ const FILE_CACHE = globalThis.__WC_REVIEWS_FILE_CACHE__ || (globalThis.__WC_REVI
 const DEFAULT_FILE = "data/reviews-db.json";
 
 export async function ensureReviewsSchema(env) {
+  const d1 = resolveD1(env);
+  if (d1) {
+    await ensureD1Schema(d1);
+    return {
+      mode: "d1",
+      path: null,
+      tables: ["reviews"]
+    };
+  }
+
   const store = await getStore(env);
   const changed = ensureSchemaShape(store.state);
   if (changed && store.mode === "file") {
@@ -17,9 +27,6 @@ export async function ensureReviewsSchema(env) {
 }
 
 export async function saveReview(env, row) {
-  const store = await getStore(env);
-  ensureSchemaShape(store.state);
-
   const review = {
     id: `rvw_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
     created_at: new Date().toISOString(),
@@ -28,6 +35,28 @@ export async function saveReview(env, row) {
     review: String(row.review || "").trim(),
     rating: Math.max(1, Math.min(5, Number(row.rating || 5)))
   };
+
+  const d1 = resolveD1(env);
+  if (d1) {
+    await ensureD1Schema(d1);
+    await d1
+      .prepare(
+        "INSERT INTO reviews (id, created_at, discord_user_id, discord_user_display, review, rating) VALUES (?, ?, ?, ?, ?, ?)"
+      )
+      .bind(
+        review.id,
+        review.created_at,
+        review.discord_user_id,
+        review.discord_user_display,
+        review.review,
+        review.rating
+      )
+      .run();
+    return review;
+  }
+
+  const store = await getStore(env);
+  ensureSchemaShape(store.state);
 
   store.state.tables.reviews.unshift(review);
   store.state.tables.reviews = store.state.tables.reviews.slice(0, 200);
@@ -41,10 +70,49 @@ export async function saveReview(env, row) {
 }
 
 export async function listReviews(env, limit = 24) {
+  const n = Math.max(1, Math.min(100, Number(limit) || 24));
+
+  const d1 = resolveD1(env);
+  if (d1) {
+    await ensureD1Schema(d1);
+    const rows = await d1
+      .prepare(
+        "SELECT id, created_at, discord_user_id, discord_user_display, review, rating FROM reviews ORDER BY datetime(created_at) DESC LIMIT ?"
+      )
+      .bind(n)
+      .all();
+    return rows.results || [];
+  }
+
   const store = await getStore(env);
   ensureSchemaShape(store.state);
-  const n = Math.max(1, Math.min(100, Number(limit) || 24));
   return store.state.tables.reviews.slice(0, n);
+}
+
+async function ensureD1Schema(db) {
+  await db
+    .prepare(
+      "CREATE TABLE IF NOT EXISTS reviews (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, discord_user_id TEXT NOT NULL, discord_user_display TEXT NOT NULL, review TEXT NOT NULL, rating INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5));"
+    )
+    .run();
+  await db
+    .prepare("CREATE INDEX IF NOT EXISTS idx_reviews_created_at ON reviews(created_at DESC);")
+    .run();
+}
+
+function resolveD1(env) {
+  if (!env || typeof env !== "object") return null;
+
+  if (env.DB && typeof env.DB.prepare === "function") {
+    return env.DB;
+  }
+
+  const bindingName = String(env.D1_BINDING_NAME || "").trim();
+  if (bindingName && env[bindingName] && typeof env[bindingName].prepare === "function") {
+    return env[bindingName];
+  }
+
+  return null;
 }
 
 async function getStore(env) {

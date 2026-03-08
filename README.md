@@ -5,17 +5,21 @@ Strona wspiera:
 - formularz kontaktowy (`POST /contact`),
 - system opini dla zalogowanych użytkowników (`POST /review`, `GET /reviews`).
 
-## System opini (JSON)
+## System opini (D1 + fallback JSON)
 
-Opinie są zapisywane do JSON i struktura tworzy się automatycznie przy pierwszym użyciu.
+W środowisku Cloudflare (Pages/Workers) opinie są zapisywane trwale do bazy D1.
+
+Jeśli binding D1 nie jest dostępny, kod przełącza się na fallback JSON (runtime Node) lub pamięć procesu.
 
 ### Endpointy
-- `GET /db/init` — tworzy/uzupełnia strukturę JSON (`tables.reviews`) i zwraca status.
+- `GET /db/init` — przygotowuje strukturę storage (D1 albo JSON fallback) i zwraca status.
 - `POST /review` — dodaje opinię zalogowanego użytkownika (nick + ID pobrane z Discord sesji).
 - `GET /reviews` — zwraca najnowsze opinie.
 
 ### Struktura danych
-Domyślny plik: `data/reviews-db.json` (w runtime Node).
+Tabela D1: `reviews`.
+
+Fallback JSON (runtime Node): domyślny plik `data/reviews-db.json`.
 
 Przykładowy kształt:
 ```json
@@ -37,7 +41,9 @@ Przykładowy kształt:
 ```
 
 ### Konfiguracja
-- opcjonalnie `REVIEWS_JSON_FILE` — własna ścieżka pliku JSON.
+- `DB` — zalecany binding D1 (Cloudflare).
+- opcjonalnie `D1_BINDING_NAME` — nazwa bindingu D1, jeśli inna niż `DB`.
+- opcjonalnie `REVIEWS_JSON_FILE` — własna ścieżka pliku JSON (fallback Node).
 
 ## Kontakt i anty-spam
 - cooldown: 45s między wiadomościami,
