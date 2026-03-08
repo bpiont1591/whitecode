@@ -20,8 +20,8 @@ const mobileMenuBtn = document.getElementById("mobileMenuBtn");
 const mobileNav = document.getElementById("mobileNav");
 
 const discordMemberCountEl = document.getElementById("discordMemberCount");
-const discordPresenceCountEl = document.getElementById("discordPresenceCount");
 const discordBotStatusEl = document.getElementById("discordBotStatus");
+const discordApiStatusEl = document.getElementById("discordApiStatus");
 const discordStatusInfoEl = document.getElementById("discordStatusInfo");
 
 let loggedUser = null;
@@ -112,11 +112,15 @@ function formatDateTime(iso) {
 
 function renderDiscordStatus(data) {
   if (discordMemberCountEl) discordMemberCountEl.textContent = Number.isFinite(data.memberCount) ? String(data.memberCount) : "—";
-  if (discordPresenceCountEl) discordPresenceCountEl.textContent = Number.isFinite(data.onlineCount) ? String(data.onlineCount) : "—";
   if (discordBotStatusEl) {
-    const status = data.botStatus || "unknown";
+    const status = data.botStatus || "offline";
     discordBotStatusEl.textContent = status;
     discordBotStatusEl.className = `bot-status ${status}`;
+  }
+  if (discordApiStatusEl) {
+    const apiStatus = data.apiStatus || "unknown";
+    discordApiStatusEl.textContent = apiStatus;
+    discordApiStatusEl.className = `bot-status ${apiStatus}`;
   }
   if (discordStatusInfoEl) {
     const stale = data.stale ? " (cache)" : "";

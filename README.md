@@ -10,8 +10,8 @@ System opinii został całkowicie wyłączony i nie jest używany na stronie ani
 ## Status Discord na stronie
 Frontend cyklicznie pobiera `GET /discord/status` i pokazuje:
 - liczbę członków serwera,
-- liczbę online,
-- status bota Whitecode (`online` / `offline` / `unknown`).
+- status bota Whitecode (`online` / `offline`),
+- status połączenia z API Discord.
 
 ### Wymagane zmienne środowiskowe
 - `DISCORD_GUILD_ID` — ID serwera Discord.

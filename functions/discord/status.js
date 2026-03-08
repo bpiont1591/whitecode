@@ -34,8 +34,16 @@ async function fetchGuildStats(env) {
   }
 
   const guild = await guildRes.json();
-  let onlineCount = null;
-  let botStatus = "unknown";
+
+  const meRes = await fetch("https://discord.com/api/v10/users/@me", {
+    headers: { Authorization: `Bot ${botToken}` }
+  });
+
+  if (!meRes.ok) {
+    throw new Error(`Discord bot API error: ${meRes.status}`);
+  }
+  let botStatus = "offline";
+  let apiStatus = "online";
 
   try {
     const widgetRes = await fetch(`https://discord.com/api/guilds/${guildId}/widget.json`, {
@@ -43,7 +51,6 @@ async function fetchGuildStats(env) {
     });
     if (widgetRes.ok) {
       const widget = await widgetRes.json();
-      onlineCount = Number.isFinite(widget.presence_count) ? widget.presence_count : null;
       const botUserId = env.DISCORD_BOT_USER_ID;
       if (botUserId && Array.isArray(widget.members)) {
         const member = widget.members.find((m) => String(m.id) === String(botUserId));
@@ -51,13 +58,13 @@ async function fetchGuildStats(env) {
       }
     }
   } catch {
-    // non-blocking
+    apiStatus = "offline";
   }
 
   return {
     memberCount: Number.isFinite(guild.approximate_member_count) ? guild.approximate_member_count : null,
-    onlineCount,
     botStatus,
+    apiStatus,
     updatedAt: new Date().toISOString(),
     stale: false
   };
