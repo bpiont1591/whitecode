@@ -8,6 +8,10 @@ Strona wspiera:
 
 System opinii po stronie Pages Functions (stary `/review`) pozostaje wyłączony.
 
+### Ważne mapowanie trasy na whitecode.pl (Cloudflare Pages Functions)
+Aby `fetch("/api/opinions")` działał na stronie, endpoint musi istnieć pod ścieżką `functions/api/opinions.js` (route: `/api/opinions`).
+W repo zostawiony jest też kompatybilny `functions/opinions.js` (`/opinions`), ale frontend używa `/api/opinions`.
+
 ## Co było zepsute i co naprawiono
 Problem wynikał z niespójności kontraktu API: frontend dostawał odpowiedź inną niż oczekiwane JSON (`{ ok: true, items: [] }`) albo HTML (`200`), przez co pokazywał błąd „Niepoprawna odpowiedź endpointu opinii (200)”.
 
