@@ -1,5 +1,7 @@
 const COOKIE_NAME = "wc_dc_session";
+const OAUTH_STATE_COOKIE_NAME = "wc_dc_oauth_state";
 const SESSION_TTL_SEC = 60 * 60 * 24 * 7; // 7 dni
+const OAUTH_STATE_TTL_SEC = 60 * 10; // 10 minut
 
 export async function createSessionCookie(user, env) {
   const now = Math.floor(Date.now() / 1000);
@@ -41,6 +43,45 @@ export async function readSessionUser(request, env) {
   } catch {
     return null;
   }
+}
+
+export async function createOauthStateCookie(nonce, env) {
+  const payload = {
+    nonce: String(nonce || ""),
+    exp: Math.floor(Date.now() / 1000) + OAUTH_STATE_TTL_SEC
+  };
+  const encoded = base64url(JSON.stringify(payload));
+  const sig = await hmac(encoded, env.SESSION_SECRET || "");
+  return `${OAUTH_STATE_COOKIE_NAME}=${encoded}.${sig}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${OAUTH_STATE_TTL_SEC}`;
+}
+
+export async function readOauthStateCookie(request, env) {
+  const cookies = parseCookieHeader(request.headers.get("Cookie") || "");
+  const raw = cookies[OAUTH_STATE_COOKIE_NAME];
+  if (!raw || !raw.includes(".")) return null;
+
+  const [encoded, sig] = raw.split(".");
+  const expected = await hmac(encoded, env.SESSION_SECRET || "");
+  if (!timingSafeEqual(sig, expected)) return null;
+
+  try {
+    const payload = JSON.parse(base64urlDecode(encoded));
+    if (!payload?.nonce || !payload?.exp) return null;
+    if (Math.floor(Date.now() / 1000) > payload.exp) return null;
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+export function clearOauthStateCookie() {
+  return `${OAUTH_STATE_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`;
+}
+
+export function randomNonce(size = 16) {
+  const bytes = new Uint8Array(size);
+  crypto.getRandomValues(bytes);
+  return bytesToBase64url(bytes);
 }
 
 export function parseCookieHeader(str) {

@@ -54,11 +54,20 @@
         <strong>WH!TEcode™</strong>
       </a>
 
+      <button id="mobileMenuBtn" class="mobile-menu-btn" type="button" aria-label="Otwórz menu" aria-controls="mobileNav" aria-expanded="false">
+        <i class="fa-solid fa-bars"></i>
+      </button>
+
       <div class="nav-links">
         <a href="#oferta">Oferta</a>
         <a href="#kontakt">Kontakt</a>
         <button id="navLogoutBtn" class="nav-logout" type="button" hidden><i class="fa-solid fa-right-from-bracket"></i> Wyloguj</button>
       </div>
+    </div>
+    <div id="mobileNav" class="mobile-nav" hidden>
+      <a href="#oferta">Oferta</a>
+      <a href="#kontakt">Kontakt</a>
+      <button id="mobileLogoutBtn" class="nav-logout" type="button" hidden><i class="fa-solid fa-right-from-bracket"></i> Wyloguj</button>
     </div>
   </nav>
 
@@ -93,6 +102,19 @@
         <span>zakres dopasowany do Twojego serwera</span>
       </article>
     </div>
+
+
+    <section id="discordStatus" class="discord-status panel" aria-live="polite">
+      <h3>Status Discord</h3>
+      <p class="panel-sub">Automatycznie odświeżane dane serwera i bota Whitecode.</p>
+      <div class="discord-status-grid">
+        <article><span>Członkowie serwera</span><strong id="discordMemberCount">—</strong></article>
+        <article><span>Online na serwerze</span><strong id="discordPresenceCount">—</strong></article>
+        <article><span>Bot Whitecode</span><strong id="discordBotStatus" class="bot-status unknown">unknown</strong></article>
+      </div>
+      <div id="discordStatusInfo" class="status-note">Ostatnia aktualizacja: —</div>
+    </section>
+
   </header>
 
   <main>
@@ -271,7 +293,7 @@
     <div class="footer-bottom">&copy; 2025-2026 WH!TEcode™. Wszelkie prawa zastrzeżone.</div>
   </footer>
 
-    <script src="script.js?v=20260306" defer></script>
+    <script src="script.js?v=20260307" defer></script>
 
 </body>
 </html>

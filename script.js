@@ -1,6 +1,7 @@
 const API_CONTACT = "/contact";
 const API_ME = "/auth/me";
 const API_LOGOUT = "/auth/logout";
+const API_DISCORD_STATUS = "/discord/status";
 
 const form = document.getElementById("contactForm");
 const statusEl = document.getElementById("status");
@@ -13,17 +14,18 @@ const authBoxEl = document.getElementById("authBox");
 const authInfoEl = document.getElementById("authInfo");
 const loginBtn = document.getElementById("discordLoginBtn");
 const navLogoutBtn = document.getElementById("navLogoutBtn");
+const mobileLogoutBtn = document.getElementById("mobileLogoutBtn");
+
+const mobileMenuBtn = document.getElementById("mobileMenuBtn");
+const mobileNav = document.getElementById("mobileNav");
+
+const discordMemberCountEl = document.getElementById("discordMemberCount");
+const discordPresenceCountEl = document.getElementById("discordPresenceCount");
+const discordBotStatusEl = document.getElementById("discordBotStatus");
+const discordStatusInfoEl = document.getElementById("discordStatusInfo");
 
 let loggedUser = null;
-
-function escapeHtml(str) {
-  return String(str || "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/\"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
+let discordStatusTimer = null;
 
 function setStatus(msg, type) {
   if (!statusEl) return;
@@ -67,6 +69,7 @@ function setAuthUI(user) {
     if (authInfoEl) authInfoEl.textContent = `Zalogowano jako: ${visibleName} (ID: ${loggedUser.id})`;
     if (loginBtn) loginBtn.hidden = true;
     if (navLogoutBtn) navLogoutBtn.hidden = false;
+    if (mobileLogoutBtn) mobileLogoutBtn.hidden = false;
     if (authBoxEl) authBoxEl.classList.add("hidden");
 
     const nameEl = document.getElementById("name");
@@ -77,6 +80,7 @@ function setAuthUI(user) {
     if (authInfoEl) authInfoEl.textContent = "Wymagane logowanie przez Discord przed wysłaniem wiadomości.";
     if (loginBtn) loginBtn.hidden = false;
     if (navLogoutBtn) navLogoutBtn.hidden = true;
+    if (mobileLogoutBtn) mobileLogoutBtn.hidden = true;
     if (authBoxEl) authBoxEl.classList.remove("hidden");
 
     const nameEl = document.getElementById("name");
@@ -84,6 +88,60 @@ function setAuthUI(user) {
     if (nameEl) nameEl.value = "";
     if (contactEl) contactEl.value = "";
   }
+}
+
+function closeMobileMenu() {
+  if (!mobileMenuBtn || !mobileNav) return;
+  mobileNav.hidden = true;
+  mobileMenuBtn.setAttribute("aria-expanded", "false");
+}
+
+function toggleMobileMenu() {
+  if (!mobileMenuBtn || !mobileNav) return;
+  const expanded = mobileMenuBtn.getAttribute("aria-expanded") === "true";
+  mobileNav.hidden = expanded;
+  mobileMenuBtn.setAttribute("aria-expanded", expanded ? "false" : "true");
+}
+
+function formatDateTime(iso) {
+  if (!iso) return "—";
+  const dt = new Date(iso);
+  if (Number.isNaN(dt.getTime())) return "—";
+  return dt.toLocaleString("pl-PL");
+}
+
+function renderDiscordStatus(data) {
+  if (discordMemberCountEl) discordMemberCountEl.textContent = Number.isFinite(data.memberCount) ? String(data.memberCount) : "—";
+  if (discordPresenceCountEl) discordPresenceCountEl.textContent = Number.isFinite(data.onlineCount) ? String(data.onlineCount) : "—";
+  if (discordBotStatusEl) {
+    const status = data.botStatus || "unknown";
+    discordBotStatusEl.textContent = status;
+    discordBotStatusEl.className = `bot-status ${status}`;
+  }
+  if (discordStatusInfoEl) {
+    const stale = data.stale ? " (cache)" : "";
+    discordStatusInfoEl.textContent = `Ostatnia aktualizacja: ${formatDateTime(data.updatedAt)}${stale}`;
+  }
+}
+
+async function refreshDiscordStatus() {
+  try {
+    const res = await fetch(API_DISCORD_STATUS, { cache: "no-store" });
+    const out = await res.json().catch(() => ({}));
+    if (!res.ok || !out.ok) {
+      if (discordStatusInfoEl) discordStatusInfoEl.textContent = out.error || "Status Discord chwilowo niedostępny.";
+      return;
+    }
+    renderDiscordStatus(out);
+  } catch {
+    if (discordStatusInfoEl) discordStatusInfoEl.textContent = "Status Discord chwilowo niedostępny.";
+  }
+}
+
+function startDiscordStatusAutoRefresh() {
+  if (discordStatusTimer) clearInterval(discordStatusTimer);
+  refreshDiscordStatus();
+  discordStatusTimer = setInterval(refreshDiscordStatus, 60_000);
 }
 
 async function refreshAuth() {
@@ -96,15 +154,39 @@ async function refreshAuth() {
   }
 }
 
+async function handleLogout() {
+  try {
+    await fetch(API_LOGOUT, { method: "POST", credentials: "include" });
+  } finally {
+    setAuthUI(null);
+    closeMobileMenu();
+  }
+}
+
 if (navLogoutBtn) {
-  navLogoutBtn.addEventListener("click", async () => {
-    try {
-      await fetch(API_LOGOUT, { method: "POST", credentials: "include" });
-    } finally {
-      setAuthUI(null);
+  navLogoutBtn.addEventListener("click", handleLogout);
+}
+
+if (mobileLogoutBtn) {
+  mobileLogoutBtn.addEventListener("click", handleLogout);
+}
+
+if (mobileMenuBtn) {
+  mobileMenuBtn.addEventListener("click", toggleMobileMenu);
+}
+
+if (mobileNav) {
+  mobileNav.addEventListener("click", (event) => {
+    const el = event.target;
+    if (el instanceof HTMLAnchorElement) {
+      closeMobileMenu();
     }
   });
 }
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") closeMobileMenu();
+});
 
 if (form) {
   form.addEventListener("submit", async (e) => {
@@ -173,3 +255,4 @@ if (messageEl) messageEl.addEventListener("input", updateCount);
 
 updateCount();
 refreshAuth();
+startDiscordStatusAutoRefresh();
