@@ -2,8 +2,7 @@ const API_CONTACT = "/contact";
 const API_ME = "/auth/me";
 const API_LOGOUT = "/auth/logout";
 const API_DISCORD_STATUS = "/discord/status";
-const API_OPINIONS = "http://193.111.250.101:10005/api/opinions";
-
+const API_OPINIONS = "/api/opinions";
 
 const form = document.getElementById("contactForm");
 const statusEl = document.getElementById("status");
@@ -30,11 +29,12 @@ const opinionsStatusEl = document.getElementById("opinionsStatus");
 
 let loggedUser = null;
 let discordStatusTimer = null;
+let opinionsTimer = null;
 
 function setStatus(msg, type) {
   if (!statusEl) return;
   statusEl.textContent = msg;
-  statusEl.className = "status status-box " + (type || "");
+  statusEl.className = `status status-box ${type || ""}`.trim();
 }
 
 function updateCount() {
@@ -55,7 +55,9 @@ function setSubmitting(isSubmitting) {
   if (submitBtn) {
     submitBtn.classList.toggle("is-loading", isSubmitting);
     if (isSubmitting) {
-      submitBtn.dataset.originalText = submitBtn.innerHTML;
+      if (!submitBtn.dataset.originalText) {
+        submitBtn.dataset.originalText = submitBtn.innerHTML;
+      }
       submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Wysyłam...';
     } else if (submitBtn.dataset.originalText) {
       submitBtn.innerHTML = submitBtn.dataset.originalText;
@@ -68,6 +70,9 @@ function setAuthUI(user) {
   const isAuth = Boolean(loggedUser && loggedUser.id);
   if (submitBtn) submitBtn.disabled = !isAuth;
 
+  const nameEl = document.getElementById("name");
+  const contactEl = document.getElementById("contact");
+
   if (isAuth) {
     const visibleName = loggedUser.global_name || loggedUser.username || "Użytkownik";
     if (authInfoEl) authInfoEl.textContent = `Zalogowano jako: ${visibleName} (ID: ${loggedUser.id})`;
@@ -75,9 +80,6 @@ function setAuthUI(user) {
     if (navLogoutBtn) navLogoutBtn.hidden = false;
     if (mobileLogoutBtn) mobileLogoutBtn.hidden = false;
     if (authBoxEl) authBoxEl.classList.add("hidden");
-
-    const nameEl = document.getElementById("name");
-    const contactEl = document.getElementById("contact");
     if (nameEl) nameEl.value = visibleName;
     if (contactEl) contactEl.value = loggedUser.id;
   } else {
@@ -86,9 +88,6 @@ function setAuthUI(user) {
     if (navLogoutBtn) navLogoutBtn.hidden = true;
     if (mobileLogoutBtn) mobileLogoutBtn.hidden = true;
     if (authBoxEl) authBoxEl.classList.remove("hidden");
-
-    const nameEl = document.getElementById("name");
-    const contactEl = document.getElementById("contact");
     if (nameEl) nameEl.value = "";
     if (contactEl) contactEl.value = "";
   }
@@ -111,7 +110,13 @@ function formatDateTime(iso) {
   if (!iso) return "—";
   const dt = new Date(iso);
   if (Number.isNaN(dt.getTime())) return "—";
-  return dt.toLocaleString("pl-PL");
+  return dt.toLocaleString("pl-PL", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function renderDiscordStatus(data) {
@@ -144,7 +149,7 @@ function escapeHtml(str) {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
+    .replace(/\"/g, "&quot;")
     .replace(/'/g, "&#039;");
 }
 
@@ -176,12 +181,19 @@ function renderOpinionCard(item) {
   `;
 }
 
+function setOpinionsStatus(message) {
+  if (opinionsStatusEl) opinionsStatusEl.textContent = message;
+}
+
 async function refreshOpinions() {
   if (!opinionsEl) return;
 
   try {
+    opinionsEl.setAttribute("aria-busy", "true");
+
     const response = await fetch(API_OPINIONS, {
       cache: "no-store",
+      credentials: "same-origin",
       headers: {
         Accept: "application/json",
       },
@@ -189,14 +201,14 @@ async function refreshOpinions() {
 
     if (!response.ok) {
       opinionsEl.innerHTML = '<p class="status-note">Nie udało się pobrać opinii.</p>';
-      if (opinionsStatusEl) opinionsStatusEl.textContent = "Nie udało się pobrać opinii.";
+      setOpinionsStatus(`Nie udało się pobrać opinii. (${response.status})`);
       return;
     }
 
     const contentType = response.headers.get("content-type") || "";
     if (!contentType.toLowerCase().includes("application/json")) {
       opinionsEl.innerHTML = '<p class="status-note">Endpoint opinii zwrócił niepoprawny format.</p>';
-      if (opinionsStatusEl) opinionsStatusEl.textContent = "Endpoint opinii zwrócił niepoprawny format.";
+      setOpinionsStatus("Endpoint opinii zwrócił niepoprawny format.");
       return;
     }
 
@@ -205,33 +217,42 @@ async function refreshOpinions() {
 
     if (!data?.ok || !items) {
       opinionsEl.innerHTML = '<p class="status-note">Niepoprawna odpowiedź endpointu opinii.</p>';
-      if (opinionsStatusEl) opinionsStatusEl.textContent = "Niepoprawna odpowiedź endpointu opinii.";
+      setOpinionsStatus("Niepoprawna odpowiedź endpointu opinii.");
       return;
     }
 
     if (items.length === 0) {
       opinionsEl.innerHTML = '<p class="status-note">Na razie nie ma jeszcze opinii.</p>';
-      if (opinionsStatusEl) opinionsStatusEl.textContent = "Na razie nie ma jeszcze opinii.";
+      setOpinionsStatus("Na razie nie ma jeszcze opinii.");
       return;
     }
 
     opinionsEl.innerHTML = items.map(renderOpinionCard).join("");
-    if (opinionsStatusEl) opinionsStatusEl.textContent = `Załadowano ${items.length} opinii.`;
+    setOpinionsStatus(`Załadowano ${items.length} opinii.`);
   } catch (error) {
     console.error("Opinions error:", error);
     opinionsEl.innerHTML = '<p class="status-note">Nie udało się pobrać opinii.</p>';
-    if (opinionsStatusEl) opinionsStatusEl.textContent = "Nie udało się pobrać opinii.";
+    setOpinionsStatus("Nie udało się pobrać opinii.");
+  } finally {
+    opinionsEl.removeAttribute("aria-busy");
   }
 }
 
 function startOpinionsAutoRefresh() {
+  if (!opinionsEl) return;
+  if (opinionsTimer) clearInterval(opinionsTimer);
   refreshOpinions();
-  setInterval(refreshOpinions, 60_000);
+  opinionsTimer = setInterval(refreshOpinions, 60_000);
 }
 
 async function refreshDiscordStatus() {
   try {
-    const res = await fetch(API_DISCORD_STATUS, { cache: "no-store" });
+    const res = await fetch(API_DISCORD_STATUS, {
+      cache: "no-store",
+      credentials: "same-origin",
+      headers: { Accept: "application/json" },
+    });
+
     const out = await res.json().catch(() => ({}));
     if (!res.ok || !out.ok) {
       if (discordStatusInfoEl) {
@@ -239,6 +260,7 @@ async function refreshDiscordStatus() {
       }
       return;
     }
+
     renderDiscordStatus(out);
   } catch {
     if (discordStatusInfoEl) {
@@ -255,7 +277,10 @@ function startDiscordStatusAutoRefresh() {
 
 async function refreshAuth() {
   try {
-    const res = await fetch(API_ME, { credentials: "include" });
+    const res = await fetch(API_ME, {
+      credentials: "include",
+      headers: { Accept: "application/json" },
+    });
     const out = await res.json().catch(() => ({}));
     setAuthUI(out.user || null);
   } catch {
@@ -272,99 +297,90 @@ async function handleLogout() {
   }
 }
 
-if (navLogoutBtn) {
-  navLogoutBtn.addEventListener("click", handleLogout);
-}
+navLogoutBtn?.addEventListener("click", handleLogout);
+mobileLogoutBtn?.addEventListener("click", handleLogout);
+mobileMenuBtn?.addEventListener("click", toggleMobileMenu);
 
-if (mobileLogoutBtn) {
-  mobileLogoutBtn.addEventListener("click", handleLogout);
-}
-
-if (mobileMenuBtn) {
-  mobileMenuBtn.addEventListener("click", toggleMobileMenu);
-}
-
-if (mobileNav) {
-  mobileNav.addEventListener("click", (event) => {
-    const el = event.target;
-    if (el instanceof HTMLAnchorElement) {
-      closeMobileMenu();
-    }
-  });
-}
+mobileNav?.addEventListener("click", (event) => {
+  const el = event.target;
+  if (el instanceof HTMLAnchorElement) {
+    closeMobileMenu();
+  }
+});
 
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") closeMobileMenu();
 });
 
-if (form) {
-  form.addEventListener("submit", async (e) => {
-    e.preventDefault();
+form?.addEventListener("submit", async (e) => {
+  e.preventDefault();
 
-    if (!loggedUser) {
-      setStatus("Najpierw zaloguj się przez Discord.", "err");
-      return;
-    }
+  if (!loggedUser) {
+    setStatus("Najpierw zaloguj się przez Discord.", "err");
+    return;
+  }
 
-    if (hpEl?.value) {
-      setStatus("Wiadomość odrzucona.", "err");
-      return;
-    }
+  if (hpEl?.value) {
+    setStatus("Wiadomość odrzucona.", "err");
+    return;
+  }
 
-    const topicEl = document.getElementById("topic");
-    const message = (messageEl?.value || "").trim();
-    const topic = topicEl?.value || "";
+  const topicEl = document.getElementById("topic");
+  const message = (messageEl?.value || "").trim();
+  const topic = topicEl?.value || "";
 
-    if (!message || !topic) {
-      setStatus("Uzupełnij temat i treść wiadomości.", "err");
-      return;
-    }
+  if (!message || !topic) {
+    setStatus("Uzupełnij temat i treść wiadomości.", "err");
+    return;
+  }
 
-    setStatus("Wysyłam wiadomość...", "");
-    setSubmitting(true);
+  setStatus("Wysyłam wiadomość...", "");
+  setSubmitting(true);
 
-    try {
-      const res = await fetch(API_CONTACT, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic, message }),
-      });
+  try {
+    const res = await fetch(API_CONTACT, {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({ topic, message }),
+    });
 
-      const out = await res.json().catch(() => ({}));
-      if (!res.ok || !out.ok) {
-        if (res.status === 429 && out.retry_after_sec) {
-          setStatus(`Za szybko wysyłasz wiadomości. Spróbuj za ${out.retry_after_sec}s.`, "err");
-        } else {
-          setStatus(out.error || "Nie udało się wysłać wiadomości.", "err");
-        }
-        return;
+    const out = await res.json().catch(() => ({}));
+    if (!res.ok || !out.ok) {
+      if (res.status === 429 && out.retry_after_sec) {
+        setStatus(`Za szybko wysyłasz wiadomości. Spróbuj za ${out.retry_after_sec}s.`, "err");
+      } else {
+        setStatus(out.error || "Nie udało się wysłać wiadomości.", "err");
       }
-
-      form.reset();
-      updateCount();
-
-      const nameEl = document.getElementById("name");
-      const contactEl = document.getElementById("contact");
-      const visibleName = loggedUser.global_name || loggedUser.username || "Użytkownik";
-      if (nameEl) nameEl.value = visibleName;
-      if (contactEl) contactEl.value = loggedUser.id;
-
-      setStatus("Wiadomość wysłana ✅", "ok");
-    } catch {
-      setStatus("Błąd połączenia. Spróbuj ponownie.", "err");
-    } finally {
-      setSubmitting(false);
-      if (submitBtn && !loggedUser) submitBtn.disabled = true;
+      return;
     }
-  });
-}
 
-if (messageEl) {
-  messageEl.addEventListener("input", updateCount);
-}
+    form.reset();
+    updateCount();
 
-updateCount();
-refreshAuth();
-startDiscordStatusAutoRefresh();
-startOpinionsAutoRefresh();
+    const nameEl = document.getElementById("name");
+    const contactEl = document.getElementById("contact");
+    const visibleName = loggedUser.global_name || loggedUser.username || "Użytkownik";
+    if (nameEl) nameEl.value = visibleName;
+    if (contactEl) contactEl.value = loggedUser.id;
+
+    setStatus("Wiadomość wysłana ✅", "ok");
+  } catch {
+    setStatus("Błąd połączenia. Spróbuj ponownie.", "err");
+  } finally {
+    setSubmitting(false);
+    if (submitBtn && !loggedUser) submitBtn.disabled = true;
+  }
+});
+
+messageEl?.addEventListener("input", updateCount);
+
+document.addEventListener("DOMContentLoaded", () => {
+  updateCount();
+  refreshAuth();
+  startDiscordStatusAutoRefresh();
+  startOpinionsAutoRefresh();
+});
