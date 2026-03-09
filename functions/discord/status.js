@@ -42,7 +42,9 @@ async function fetchGuildStats(env) {
   if (!meRes.ok) {
     throw new Error(`Discord bot API error: ${meRes.status}`);
   }
-  let botStatus = "offline";
+  // Jeśli token bota działa, traktujemy bota jako online.
+  // Widget serwera (jeśli dostępny) może doprecyzować status.
+  let botStatus = "online";
   let apiStatus = "online";
 
   try {
@@ -54,7 +56,8 @@ async function fetchGuildStats(env) {
       const botUserId = env.DISCORD_BOT_USER_ID;
       if (botUserId && Array.isArray(widget.members)) {
         const member = widget.members.find((m) => String(m.id) === String(botUserId));
-        botStatus = member?.status || "offline";
+        const rawStatus = String(member?.status || "offline").toLowerCase();
+        botStatus = ["online", "idle", "dnd"].includes(rawStatus) ? "online" : "offline";
       }
     }
   } catch {
