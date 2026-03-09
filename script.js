@@ -2,7 +2,7 @@ const API_CONTACT = "/contact";
 const API_ME = "/auth/me";
 const API_LOGOUT = "/auth/logout";
 const API_DISCORD_STATUS = "/discord/status";
-const API_OPINIONS = "https://api.whitecode.pl/api/opinions";
+const API_OPINIONS = "http://api.whitecode.pl:10005/api/opinions";
 
 const form = document.getElementById("contactForm");
 const statusEl = document.getElementById("status");
