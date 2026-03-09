@@ -114,17 +114,24 @@ function formatDateTime(iso) {
 }
 
 function renderDiscordStatus(data) {
-  if (discordMemberCountEl) discordMemberCountEl.textContent = Number.isFinite(data.memberCount) ? String(data.memberCount) : "—";
+  if (discordMemberCountEl) {
+    discordMemberCountEl.textContent = Number.isFinite(data.memberCount)
+      ? String(data.memberCount)
+      : "—";
+  }
+
   if (discordBotStatusEl) {
     const status = data.botStatus || "offline";
     discordBotStatusEl.textContent = status;
     discordBotStatusEl.className = `bot-status ${status}`;
   }
+
   if (discordApiStatusEl) {
     const apiStatus = data.apiStatus || "unknown";
     discordApiStatusEl.textContent = apiStatus;
     discordApiStatusEl.className = `bot-status ${apiStatus}`;
   }
+
   if (discordStatusInfoEl) {
     const stale = data.stale ? " (cache)" : "";
     discordStatusInfoEl.textContent = `Ostatnia aktualizacja: ${formatDateTime(data.updatedAt)}${stale}`;
@@ -172,7 +179,12 @@ async function refreshOpinions() {
   if (!opinionsEl) return;
 
   try {
-    const response = await fetch("/api/opinions", { cache: "no-store" });
+    const response = await fetch(API_OPINIONS, {
+      cache: "no-store",
+      headers: {
+        Accept: "application/json",
+      },
+    });
 
     if (!response.ok) {
       opinionsEl.innerHTML = '<p class="status-note">Nie udało się pobrać opinii.</p>';
@@ -182,8 +194,8 @@ async function refreshOpinions() {
 
     const contentType = response.headers.get("content-type") || "";
     if (!contentType.toLowerCase().includes("application/json")) {
-      opinionsEl.innerHTML = '<p class="status-note">Nie udało się pobrać opinii.</p>';
-      if (opinionsStatusEl) opinionsStatusEl.textContent = "Nie udało się pobrać opinii.";
+      opinionsEl.innerHTML = '<p class="status-note">Endpoint opinii zwrócił niepoprawny format.</p>';
+      if (opinionsStatusEl) opinionsStatusEl.textContent = "Endpoint opinii zwrócił niepoprawny format.";
       return;
     }
 
@@ -191,8 +203,8 @@ async function refreshOpinions() {
     const items = Array.isArray(data?.items) ? data.items : null;
 
     if (!data?.ok || !items) {
-      opinionsEl.innerHTML = '<p class="status-note">Nie udało się pobrać opinii.</p>';
-      if (opinionsStatusEl) opinionsStatusEl.textContent = "Nie udało się pobrać opinii.";
+      opinionsEl.innerHTML = '<p class="status-note">Niepoprawna odpowiedź endpointu opinii.</p>';
+      if (opinionsStatusEl) opinionsStatusEl.textContent = "Niepoprawna odpowiedź endpointu opinii.";
       return;
     }
 
@@ -220,12 +232,16 @@ async function refreshDiscordStatus() {
     const res = await fetch(API_DISCORD_STATUS, { cache: "no-store" });
     const out = await res.json().catch(() => ({}));
     if (!res.ok || !out.ok) {
-      if (discordStatusInfoEl) discordStatusInfoEl.textContent = out.error || "Status Discord chwilowo niedostępny.";
+      if (discordStatusInfoEl) {
+        discordStatusInfoEl.textContent = out.error || "Status Discord chwilowo niedostępny.";
+      }
       return;
     }
     renderDiscordStatus(out);
   } catch {
-    if (discordStatusInfoEl) discordStatusInfoEl.textContent = "Status Discord chwilowo niedostępny.";
+    if (discordStatusInfoEl) {
+      discordStatusInfoEl.textContent = "Status Discord chwilowo niedostępny.";
+    }
   }
 }
 
@@ -302,7 +318,7 @@ if (form) {
       return;
     }
 
-    setStatus("Wysyłam wiadomość…", "");
+    setStatus("Wysyłam wiadomość...", "");
     setSubmitting(true);
 
     try {
@@ -310,7 +326,7 @@ if (form) {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic, message })
+        body: JSON.stringify({ topic, message }),
       });
 
       const out = await res.json().catch(() => ({}));
@@ -342,7 +358,9 @@ if (form) {
   });
 }
 
-if (messageEl) messageEl.addEventListener("input", updateCount);
+if (messageEl) {
+  messageEl.addEventListener("input", updateCount);
+}
 
 updateCount();
 refreshAuth();
