@@ -1,4 +1,3 @@
-// -*- coding: utf-8 -*-
 const API_CONTACT = "/contact";
 const API_ME = "/auth/me";
 const API_LOGOUT = "/auth/logout";
@@ -217,7 +216,8 @@ async function refreshOpinions() {
 
     opinionsEl.innerHTML = items.map(renderOpinionCard).join("");
     if (opinionsStatusEl) opinionsStatusEl.textContent = `Załadowano ${items.length} opinii.`;
-  } catch {
+  } catch (error) {
+    console.error("Opinions error:", error);
     opinionsEl.innerHTML = '<p class="status-note">Nie udało się pobrać opinii.</p>';
     if (opinionsStatusEl) opinionsStatusEl.textContent = "Nie udało się pobrać opinii.";
   }
