@@ -1,3 +1,4 @@
+// -*- coding: utf-8 -*-
 const API_CONTACT = "/contact";
 const API_ME = "/auth/me";
 const API_LOGOUT = "/auth/logout";
