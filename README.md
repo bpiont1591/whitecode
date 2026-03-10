@@ -14,9 +14,7 @@ To SQL tworzy tabelę i dodaje **jedną testową opinię**, więc po wdrożeniu 
 
 ## SQL do wklejenia
 ```sql
-DROP TABLE IF EXISTS opinions;
-
-CREATE TABLE opinions (
+CREATE TABLE IF NOT EXISTS opinions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id TEXT NOT NULL,
   user_tag TEXT NOT NULL,
@@ -27,17 +25,17 @@ CREATE TABLE opinions (
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
-CREATE INDEX idx_opinions_created_at ON opinions(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_opinions_created_at ON opinions(created_at DESC);
 
 INSERT INTO opinions (user_id, user_tag, rating, atmosfera, przebieg, text)
-VALUES (
+SELECT
   '123456789012345678',
   'Testowy Klient',
   5,
   'Bardzo dobra komunikacja',
   'Szybko, terminowo i profesjonalnie',
   'Współpraca przebiegła świetnie. Polecam WH!TEcode!'
-);
+WHERE NOT EXISTS (SELECT 1 FROM opinions);
 ```
 
 ## Usunięty stary system opinii
