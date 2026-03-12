@@ -124,6 +124,10 @@ body {
   background: rgba(10, 11, 17, 0.95);
 }
 
+.mobile-nav[hidden] {
+  display: none !important;
+}
+
 .mobile-nav a {
   color: var(--muted);
   text-decoration: none;
@@ -664,7 +668,8 @@ footer {
 @media (max-width: 760px) {
   .nav-links { display: none; }
   .mobile-menu-btn { display: inline-flex; }
-  .mobile-nav { display: flex; }
+  .mobile-nav { display: none; }
+  .mobile-nav.is-open { display: flex; }
   .discord-status-grid { grid-template-columns: 1fr; }
   .form-row { grid-template-columns: 1fr; }
   .footer-grid { grid-template-columns: 1fr; }

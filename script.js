@@ -125,14 +125,18 @@ function setAuthUI(user) {
 function closeMobileMenu() {
   if (!mobileMenuBtn || !mobileNav) return;
   mobileNav.hidden = true;
+  mobileNav.classList.remove("is-open");
   mobileMenuBtn.setAttribute("aria-expanded", "false");
 }
 
 function toggleMobileMenu() {
   if (!mobileMenuBtn || !mobileNav) return;
   const expanded = mobileMenuBtn.getAttribute("aria-expanded") === "true";
-  mobileNav.hidden = expanded;
-  mobileMenuBtn.setAttribute("aria-expanded", expanded ? "false" : "true");
+  const shouldOpen = !expanded;
+
+  mobileNav.hidden = !shouldOpen;
+  mobileNav.classList.toggle("is-open", shouldOpen);
+  mobileMenuBtn.setAttribute("aria-expanded", shouldOpen ? "true" : "false");
 }
 
 function formatDateTime(iso) {
