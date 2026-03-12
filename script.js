@@ -242,7 +242,7 @@ async function refreshOpinions() {
     }
 
     opinionsEl.innerHTML = items.map(renderOpinionCard).join("");
-    if (opinionsStatusEl) opinionsStatusEl.textContent = `Załadowano ${items.length} opinii.`;
+    if (opinionsStatusEl) opinionsStatusEl.textContent = "";
   } catch (error) {
     console.error("Opinions error:", error);
     opinionsEl.innerHTML = '<p class="status-note">Nie udało się pobrać opinii.</p>';
