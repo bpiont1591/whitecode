@@ -62,7 +62,7 @@ body {
   font-weight: 800;
 }
 
-.brand img { width: 36px; filter: drop-shadow(0 0 10px rgba(228, 235, 255, 0.4)); }
+.brand img { width: 36px; }
 
 .nav-links { display: flex; gap: 8px; }
 
