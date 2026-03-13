@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2048 2048" role="img" aria-label="WH!TEcode logo">
+  <rect width="2048" height="2048" fill="#000"/>
+
+  <!-- left stroke -->
+  <polygon fill="#fff" points="435,450 735,450 735,980 940,1465 670,1465 435,980"/>
+
+  <!-- center stroke -->
+  <polygon fill="#fff" points="950,450 1230,1465 1450,1465 1090,450"/>
+  <polygon fill="#fff" points="860,760 985,520 1065,700 940,940"/>
+
+  <!-- right stroke -->
+  <polygon fill="#fff" points="1320,450 1570,450 1570,970 1510,1200 1320,860"/>
+</svg>
