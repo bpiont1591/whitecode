@@ -4,7 +4,7 @@ Aktualna wersja używa **bazy D1** do opinii (bez starego systemu `/review` i pr
 
 ## Endpointy opinii
 - `GET /api/opinions` – lista ostatnich 30 opinii
-- `POST /api/opinions` – dodanie opinii (wymaga logowania Discord); `user_id` i `user_tag` są zapisywane wyłącznie z sesji OAuth po stronie serwera
+- `POST /api/opinions` – dodanie opinii (wymaga logowania Discord i rangi `✨Klient` o ID `1448144394426388622`); `user_id` i `user_tag` są zapisywane wyłącznie z sesji OAuth po stronie serwera
 
 ## Konfiguracja bazy (Cloudflare D1)
 1. Utwórz bazę D1 i podepnij binding o nazwie **`DB`** do Pages Functions.
@@ -41,3 +41,11 @@ WHERE NOT EXISTS (SELECT 1 FROM opinions);
 ## Usunięty stary system opinii
 - `/review`, `/reviews`, `/opinions` zwracają `410 Gone`.
 - Frontend używa tylko `/api/opinions`.
+
+
+## Wymagane zmienne środowiskowe dla opinii
+- `DB` (binding D1)
+- `DISCORD_GUILD_ID`
+- `DISCORD_BOT_TOKEN`
+
+Bez `DISCORD_GUILD_ID` i `DISCORD_BOT_TOKEN` backend nie może zweryfikować rangi `✨Klient` podczas `POST /api/opinions`.

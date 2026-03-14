@@ -1,5 +1,7 @@
 import { readSessionUser } from "../_lib/auth.js";
 
+const REQUIRED_CLIENT_ROLE_ID = "1448144394426388622";
+
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -34,6 +36,29 @@ function formatDiscordDisplayName(user) {
     : "Użytkownik";
 
   return globalName ? `${globalName} (${tag})` : tag;
+}
+
+
+async function hasRequiredClientRole(env, userId) {
+  const guildId = String(env.DISCORD_GUILD_ID || "").trim();
+  const botToken = String(env.DISCORD_BOT_TOKEN || "").trim();
+
+  if (!guildId || !botToken) {
+    throw new Error("Brak DISCORD_GUILD_ID lub DISCORD_BOT_TOKEN do walidacji roli opinii.");
+  }
+
+  const memberRes = await fetch(`https://discord.com/api/v10/guilds/${guildId}/members/${userId}`, {
+    headers: { Authorization: `Bot ${botToken}` }
+  });
+
+  if (memberRes.status === 404) return false;
+  if (!memberRes.ok) {
+    throw new Error(`Discord member API error: ${memberRes.status}`);
+  }
+
+  const member = await memberRes.json().catch(() => ({}));
+  const roles = Array.isArray(member?.roles) ? member.roles.map((r) => String(r)) : [];
+  return roles.includes(REQUIRED_CLIENT_ROLE_ID);
 }
 
 function validatePayload(data) {
@@ -108,6 +133,10 @@ export async function onRequestPost({ request, env }) {
   }
 
   try {
+    const hasRole = await hasRequiredClientRole(env, userId);
+    if (!hasRole) {
+      return json({ ok: false, error: "Tylko użytkownicy z rangą ✨Klient mogą dodać opinię." }, 403);
+    }
     const inserted = await env.DB.prepare(
       `INSERT INTO opinions (user_id, user_tag, rating, atmosfera, przebieg, text)
        VALUES (?1, ?2, ?3, ?4, ?5, ?6)
