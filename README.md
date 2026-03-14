@@ -4,7 +4,7 @@ Aktualna wersja używa **bazy D1** do opinii (bez starego systemu `/review` i pr
 
 ## Endpointy opinii
 - `GET /api/opinions` – lista ostatnich 30 opinii
-- `POST /api/opinions` – dodanie opinii (wymaga logowania Discord)
+- `POST /api/opinions` – dodanie opinii (wymaga logowania Discord); `user_id` i `user_tag` są zapisywane wyłącznie z sesji OAuth po stronie serwera
 
 ## Konfiguracja bazy (Cloudflare D1)
 1. Utwórz bazę D1 i podepnij binding o nazwie **`DB`** do Pages Functions.

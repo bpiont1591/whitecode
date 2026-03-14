@@ -23,6 +23,19 @@ function normalizeRow(row) {
   };
 }
 
+
+function formatDiscordDisplayName(user) {
+  const username = String(user?.username || "").trim();
+  const globalName = String(user?.global_name || "").trim();
+  const discr = String(user?.discriminator || "0").trim();
+
+  const tag = username
+    ? (discr && discr !== "0" ? `${username}#${discr}` : username)
+    : "Użytkownik";
+
+  return globalName ? `${globalName} (${tag})` : tag;
+}
+
 function validatePayload(data) {
   const rating = Number(data?.rating);
   const atmosfera = String(data?.atmosfera || "").trim();
@@ -88,7 +101,11 @@ export async function onRequestPost({ request, env }) {
 
   const payload = validation.payload;
   const userId = String(user.sub || "").trim();
-  const userTag = String(user.global_name || user.username || "Użytkownik").trim();
+  const userTag = formatDiscordDisplayName(user);
+
+  if (!userId) {
+    return json({ ok: false, error: "Brak ID użytkownika Discord w sesji." }, 401);
+  }
 
   try {
     const inserted = await env.DB.prepare(
