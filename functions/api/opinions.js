@@ -1,6 +1,8 @@
 import { readSessionUser } from "../_lib/auth.js";
 
 const REQUIRED_CLIENT_ROLE_ID = "1448144394426388622";
+const GET_CACHE_KEY = "__WC_OPINIONS_GET_CACHE__";
+const GET_CACHE_TTL_MS = 60_000;
 
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -61,6 +63,14 @@ async function hasRequiredClientRole(env, userId) {
   return roles.includes(REQUIRED_CLIENT_ROLE_ID);
 }
 
+
+function getOpinionsCache() {
+  if (!globalThis[GET_CACHE_KEY]) {
+    globalThis[GET_CACHE_KEY] = { items: [], at: 0 };
+  }
+  return globalThis[GET_CACHE_KEY];
+}
+
 function validatePayload(data) {
   const rating = Number(data?.rating);
   const atmosfera = String(data?.atmosfera || "").trim();
@@ -88,6 +98,13 @@ export async function onRequestGet({ env }) {
     return json({ ok: false, error: "Brak bazy D1 (binding DB)." }, 500);
   }
 
+  const cache = getOpinionsCache();
+  const now = Date.now();
+
+  if (cache.items.length && now - cache.at < GET_CACHE_TTL_MS) {
+    return json({ ok: true, items: cache.items, stale: false });
+  }
+
   try {
     const { results } = await env.DB.prepare(
       `SELECT id, user_id, user_tag, rating, atmosfera, przebieg, text, created_at
@@ -97,8 +114,14 @@ export async function onRequestGet({ env }) {
     ).all();
 
     const items = Array.isArray(results) ? results.map(normalizeRow) : [];
-    return json({ ok: true, items });
+    cache.items = items;
+    cache.at = now;
+
+    return json({ ok: true, items, stale: false });
   } catch (error) {
+    if (cache.items.length) {
+      return json({ ok: true, items: cache.items, stale: true });
+    }
     return json({ ok: false, error: error instanceof Error ? error.message : "Nie udało się pobrać opinii." }, 500);
   }
 }

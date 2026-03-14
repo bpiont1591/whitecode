@@ -33,6 +33,7 @@ const opinionsStatusEl = document.getElementById("opinionsStatus");
 
 let loggedUser = null;
 let discordStatusTimer = null;
+let opinionsRetryTimer = null;
 
 function setStatus(msg, type) {
   if (!statusEl) return;
@@ -208,6 +209,15 @@ function renderOpinionCard(item) {
   `;
 }
 
+
+function scheduleOpinionsRetry() {
+  if (opinionsRetryTimer) return;
+  opinionsRetryTimer = setTimeout(() => {
+    opinionsRetryTimer = null;
+    refreshOpinions();
+  }, 3000);
+}
+
 async function refreshOpinions() {
   if (!opinionsEl) return;
 
@@ -218,15 +228,21 @@ async function refreshOpinions() {
     });
 
     if (!response.ok) {
-      opinionsEl.innerHTML = '<p class="status-note">Nie udało się pobrać opinii.</p>';
-      if (opinionsStatusEl) opinionsStatusEl.textContent = "Nie udało się pobrać opinii.";
+      if (!opinionsEl.children.length) {
+        opinionsEl.innerHTML = '<p class="status-note">Nie udało się pobrać opinii.</p>';
+      }
+      if (opinionsStatusEl) opinionsStatusEl.textContent = "Chwilowy problem z odświeżeniem opinii — ponawiam...";
+      scheduleOpinionsRetry();
       return;
     }
 
     const contentType = response.headers.get("content-type") || "";
     if (!contentType.toLowerCase().includes("application/json")) {
-      opinionsEl.innerHTML = '<p class="status-note">Endpoint opinii zwrócił niepoprawny format.</p>';
-      if (opinionsStatusEl) opinionsStatusEl.textContent = "Endpoint opinii zwrócił niepoprawny format.";
+      if (!opinionsEl.children.length) {
+        opinionsEl.innerHTML = '<p class="status-note">Endpoint opinii zwrócił niepoprawny format.</p>';
+      }
+      if (opinionsStatusEl) opinionsStatusEl.textContent = "Chwilowy problem z odświeżeniem opinii — ponawiam...";
+      scheduleOpinionsRetry();
       return;
     }
 
@@ -234,8 +250,11 @@ async function refreshOpinions() {
     const items = Array.isArray(data?.items) ? data.items : null;
 
     if (!data?.ok || !items) {
-      opinionsEl.innerHTML = '<p class="status-note">Niepoprawna odpowiedź endpointu opinii.</p>';
-      if (opinionsStatusEl) opinionsStatusEl.textContent = "Niepoprawna odpowiedź endpointu opinii.";
+      if (!opinionsEl.children.length) {
+        opinionsEl.innerHTML = '<p class="status-note">Niepoprawna odpowiedź endpointu opinii.</p>';
+      }
+      if (opinionsStatusEl) opinionsStatusEl.textContent = "Chwilowy problem z odświeżeniem opinii — ponawiam...";
+      scheduleOpinionsRetry();
       return;
     }
 
@@ -249,8 +268,11 @@ async function refreshOpinions() {
     if (opinionsStatusEl) opinionsStatusEl.textContent = "";
   } catch (error) {
     console.error("Opinions error:", error);
-    opinionsEl.innerHTML = '<p class="status-note">Nie udało się pobrać opinii.</p>';
-    if (opinionsStatusEl) opinionsStatusEl.textContent = "Nie udało się pobrać opinii.";
+    if (!opinionsEl.children.length) {
+      opinionsEl.innerHTML = '<p class="status-note">Nie udało się pobrać opinii.</p>';
+    }
+    if (opinionsStatusEl) opinionsStatusEl.textContent = "Chwilowy problem z odświeżeniem opinii — ponawiam...";
+    scheduleOpinionsRetry();
   }
 }
 
