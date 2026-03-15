@@ -2,6 +2,14 @@ import { createSessionCookie, base64urlDecode, clearOauthStateCookie, readOauthS
 
 const OAUTH_MAX_AGE_MS = 10 * 60 * 1000;
 
+function sanitizeReturnTo(value) {
+  const candidate = String(value || "").trim();
+  if (!candidate.startsWith("/") || candidate.startsWith("//") || candidate.includes("\\")) {
+    return "/#kontakt";
+  }
+  return candidate;
+}
+
 export async function onRequestGet({ request, env }) {
   try {
     const u = new URL(request.url);
@@ -67,10 +75,7 @@ export async function onRequestGet({ request, env }) {
     const user = await meRes.json();
     const sessionCookie = await createSessionCookie(user, env);
 
-    let returnTo = "/#kontakt";
-    if (stateObj?.returnTo && String(stateObj.returnTo).startsWith("/")) {
-      returnTo = stateObj.returnTo;
-    }
+    const returnTo = sanitizeReturnTo(stateObj?.returnTo);
 
     const headers = new Headers({ Location: returnTo });
     headers.append("Set-Cookie", sessionCookie);

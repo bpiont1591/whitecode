@@ -49,3 +49,8 @@ WHERE NOT EXISTS (SELECT 1 FROM opinions);
 - `DISCORD_BOT_TOKEN`
 
 Bez `DISCORD_GUILD_ID` i `DISCORD_BOT_TOKEN` backend nie może zweryfikować rangi `✨Klient` podczas `POST /api/opinions`.
+
+
+## Stabilność OAuth i jedna domena
+- Ustaw `CANONICAL_HOST=www.whitecode.pl` (Pages env), aby wymusić jedną domenę i ograniczyć `OAuth state mismatch`.
+- `DISCORD_REDIRECT_URI` ustaw identycznie jak w Discord Developer Portal, np. `https://www.whitecode.pl/auth/discord/callback`.

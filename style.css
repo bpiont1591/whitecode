@@ -16,7 +16,7 @@
 html { scroll-behavior: smooth; }
 
 body {
-  font-family: Inter, "Segoe UI", Roboto, Arial, sans-serif;
+  font-family: "Manrope", "Inter", "Segoe UI", Roboto, Arial, sans-serif;
   color: var(--text);
   background:
     radial-gradient(circle at 10% -10%, rgba(159, 183, 255, 0.20), transparent 35%),
@@ -159,6 +159,11 @@ section,
   border: 1px solid var(--line);
   border-radius: 999px;
   margin-bottom: 18px;
+}
+
+h1, h2, h3, h4, .brand strong {
+  font-family: "Sora", "Manrope", "Segoe UI", sans-serif;
+  letter-spacing: 0.01em;
 }
 
 h1 {

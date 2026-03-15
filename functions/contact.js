@@ -56,17 +56,20 @@ export async function onRequestPost({ request, env }) {
     const createdAt = new Date().toISOString();
 
     const payload = {
-      username: "Kontakt ze strony (WH!TEcode)",
+      username: discordDisplay,
+      avatar_url: user.avatar
+        ? `https://cdn.discordapp.com/avatars/${encodeURIComponent(user.sub)}/${encodeURIComponent(user.avatar)}.png?size=128`
+        : undefined,
       allowed_mentions: { parse: [] },
       embeds: [{
-        title: "📩 Nowa wiadomość z formularza",
+        title: "Nowa wiadomość z formularza",
         description: message.length > 3500 ? (message.slice(0, 3500) + "…") : message,
         color: 0xFFFFFF,
         fields: [
-          { name: "🎯 Temat", value: safe(topic), inline: false },
-          { name: "👤 Użytkownik Discord", value: `${discordDisplay}\nID: ${safe(user.sub)}`, inline: false }
+          { name: "Temat", value: safe(topic), inline: false },
+          { name: "Użytkownik Discord", value: `${discordDisplay}\nID: ${safe(user.sub)}`, inline: false }
         ],
-        footer: { text: "WH!TEcode • Formularz kontaktowy" },
+        footer: { text: "Wiadomość ze strony whitecode.pl" },
         timestamp: createdAt
       }]
     };

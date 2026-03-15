@@ -1,5 +1,13 @@
 import { base64url, createOauthStateCookie, randomNonce } from "../../_lib/auth.js";
 
+function sanitizeReturnTo(value) {
+  const candidate = String(value || "").trim();
+  if (!candidate.startsWith("/") || candidate.startsWith("//") || candidate.includes("\\")) {
+    return "/#kontakt";
+  }
+  return candidate;
+}
+
 export async function onRequestGet({ request, env }) {
   const clientId = env.DISCORD_CLIENT_ID;
   const redirectUri = env.DISCORD_REDIRECT_URI;
@@ -12,7 +20,7 @@ export async function onRequestGet({ request, env }) {
   const stateObj = {
     t: Date.now(),
     nonce,
-    returnTo: new URL(request.url).searchParams.get("returnTo") || "/#kontakt"
+    returnTo: sanitizeReturnTo(new URL(request.url).searchParams.get("returnTo"))
   };
   const state = base64url(JSON.stringify(stateObj));
   const stateCookie = await createOauthStateCookie(nonce, env);
